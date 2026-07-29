@@ -1,0 +1,127 @@
+{
+  "project_name": "gpx-live-tracker",
+  "description": "Web app permettant d'uploader un fichier GPX (track), d'afficher le tracé sur une carte, et de suivre sa position GPS en temps réel avec projection sur le tracé. Usage solo, aucun backend, tout tourne côté client. Cible Android Chrome uniquement.",
+  "target_platform": "Android Chrome, navigateur mobile, pas besoin de compatibilité iOS ou desktop avancée",
+  "constraints": {
+    "no_backend": true,
+    "no_database": true,
+    "no_auth": true,
+    "no_multi_user_sharing": true,
+    "offline_map_tiles": false,
+    "note": "Toute la logique vit dans le navigateur. Le fichier GPX est parsé en mémoire au moment de l'upload, aucune persistance serveur nécessaire."
+  },
+  "tech_stack": {
+    "build_tool": "Vite",
+    "framework": "React 18 (fonctionnel, hooks uniquement)",
+    "language": "TypeScript",
+    "map_library": "MapLibre GL JS",
+    "gpx_parsing": "@tmcw/togeojson (parse le XML GPX en GeoJSON)",
+    "geospatial_calculations": "Turf.js (@turf/nearest-point-on-line, @turf/length, @turf/distance)",
+    "styling": "CSS plain, pas de framework CSS lourd",
+    "hosting": "Vercel, déploiement statique",
+    "state_management": "useState/useReducer natif React, pas de Redux, l'app est simple"
+  },
+  "gpx_handling": {
+    "expected_element": "trk (track), pas rte (route)",
+    "reason": "Une track contient des trkpt denses représentant le chemin réel parcouru, nécessaires pour un projeté précis de la position live sur la ligne. Une route ne contient que des points d'étape espacés, insuffisant pour du map-matching.",
+    "fallback_behavior": "Si le fichier GPX contient une rte et pas de trk, afficher un avertissement à l'utilisateur mais quand même tenter l'affichage en traitant les rtept comme une ligne.",
+    "multi_segment_handling": "Si le GPX contient plusieurs trkseg, les concaténer en une seule LineString continue pour les calculs de projection.",
+    "elevation_data": "Extraire les données d'élévation (ele) de chaque point si présentes, pour calcul du dénivelé cumulé."
+  },
+  "features": [
+    {
+      "id": "upload_gpx",
+      "priority": "must_have",
+      "description": "Input file HTML natif, filtre .gpx. Lecture via FileReader API, parsing XML avec togeojson, conversion en GeoJSON LineString stocké en state React."
+    },
+    {
+      "id": "display_track_on_map",
+      "priority": "must_have",
+      "description": "Affichage du tracé GeoJSON sur MapLibre avec une couche de ligne colorée. Auto-fit du bounds de la carte sur l'étendue complète du tracé au chargement (fitBounds avec padding)."
+    },
+    {
+      "id": "live_gps_tracking",
+      "priority": "must_have",
+      "description": "Utilisation de navigator.geolocation.watchPosition avec options { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 }. Affichage d'un marqueur de position live sur la carte, mis à jour à chaque callback.",
+      "cleanup": "clearWatch appelé au démontage du composant ou à l'arrêt manuel du tracking par l'utilisateur."
+    },
+    {
+      "id": "position_projection",
+      "priority": "must_have",
+      "description": "À chaque nouvelle position GPS, projeter le point sur la LineString du tracé via turf.nearestPointOnLine. Calculer la distance parcourue le long du tracé (location en mètres retournée par turf) et le pourcentage de complétion (distance parcourue / longueur totale du tracé)."
+    },
+    {
+      "id": "progress_display",
+      "priority": "must_have",
+      "description": "Panneau d'info affichant: distance parcourue / distance totale (km), pourcentage de complétion, écart perpendiculaire entre la position réelle et le tracé (utile pour savoir si l'utilisateur s'est écarté du chemin)."
+    },
+    {
+      "id": "elevation_profile",
+      "priority": "nice_to_have",
+      "description": "Si données d'élévation présentes dans le GPX, afficher un graphique simple (SVG ou canvas) du profil altimétrique avec un curseur indiquant la position actuelle projetée sur ce profil."
+    },
+    {
+      "id": "off_track_warning",
+      "priority": "nice_to_have",
+      "description": "Si la distance perpendiculaire entre la position GPS et le tracé dépasse un seuil configurable (par défaut 50m), afficher une alerte visuelle indiquant que l'utilisateur s'est écarté."
+    },
+    {
+      "id": "wake_lock",
+      "priority": "nice_to_have",
+      "description": "Utiliser la Screen Wake Lock API (navigator.wakeLock.request('screen')) pour empêcher le verrouillage de l'écran pendant le tracking actif, évitant les micro-coupures de géolocalisation en arrière-plan sur Android Chrome."
+    },
+    {
+      "id": "reset_and_new_upload",
+      "priority": "must_have",
+      "description": "Bouton pour réinitialiser l'état et permettre l'upload d'un nouveau fichier GPX sans recharger la page."
+    }
+  ],
+  "data_models": {
+    "TrackData": {
+      "geojson": "GeoJSON.Feature<GeoJSON.LineString>",
+      "totalDistanceMeters": "number",
+      "hasElevation": "boolean",
+      "elevationProfile": "Array<{ distanceMeters: number, elevationMeters: number }> | null",
+      "bounds": "[number, number, number, number]"
+    },
+    "LivePosition": {
+      "lat": "number",
+      "lng": "number",
+      "accuracyMeters": "number",
+      "timestampMs": "number"
+    },
+    "ProjectedPosition": {
+      "distanceAlongTrackMeters": "number",
+      "percentComplete": "number",
+      "perpendicularOffsetMeters": "number",
+      "projectedLat": "number",
+      "projectedLng": "number"
+    }
+  },
+  "file_structure": {
+    "src/main.tsx": "Point d'entrée React",
+    "src/App.tsx": "Composant racine, gère l'état global (track chargée ou non)",
+    "src/components/GpxUploader.tsx": "Composant d'upload et parsing du fichier",
+    "src/components/MapView.tsx": "Composant MapLibre, affiche track + marqueur live",
+    "src/components/ProgressPanel.tsx": "Panneau d'affichage distance/pourcentage/écart",
+    "src/components/ElevationChart.tsx": "Graphique de profil altimétrique (nice to have)",
+    "src/hooks/useGeolocation.ts": "Hook custom encapsulant watchPosition/clearWatch",
+    "src/hooks/useWakeLock.ts": "Hook custom encapsulant la Wake Lock API",
+    "src/utils/gpxParser.ts": "Fonctions de parsing GPX vers GeoJSON + extraction élévation",
+    "src/utils/trackMath.ts": "Fonctions de calcul: distance totale, projection, pourcentage",
+    "src/types/index.ts": "Définitions TypeScript des interfaces de data models"
+  },
+  "implementation_notes": {
+    "geolocation_permissions": "Demander la permission de géolocalisation uniquement au clic sur un bouton explicite 'Démarrer le suivi', jamais au chargement de la page, pour respecter le comportement attendu par Chrome Android et éviter un refus automatique.",
+    "map_style": "Utiliser un style MapLibre gratuit sans clé API, par exemple les tuiles OpenFreeMap ou MapTiler en tier gratuit avec clé perso si besoin de meilleur rendu.",
+    "performance": "Pour des tracks très longues (plusieurs milliers de points), envisager un simplify via turf.simplify avant affichage pour garder le rendu fluide, sans impacter la précision de la projection qui elle utilise la track originale complète.",
+    "error_handling": "Gérer explicitement: fichier non-GPX, GPX malformé, GPX sans trkpt exploitables, geolocation refusée par l'utilisateur, geolocation timeout. Afficher des messages d'erreur clairs à l'écran, pas juste en console."
+  },
+  "acceptance_criteria": [
+    "Un fichier GPX valide contenant une track s'affiche correctement sur la carte avec fitBounds automatique",
+    "Le clic sur 'Démarrer le suivi' déclenche la demande de permission puis affiche un marqueur de position mis à jour en continu",
+    "La distance parcourue et le pourcentage affichés se mettent à jour à chaque nouvelle position GPS",
+    "L'app fonctionne sans connexion serveur autre que le chargement des tuiles de carte",
+    "Aucune donnée n'est envoyée à un backend, tout reste local au navigateur"
+  ]
+}
