@@ -1,7 +1,7 @@
 import length from '@turf/length';
 import nearestPointOnLine from '@turf/nearest-point-on-line';
 import simplify from '@turf/simplify';
-import type { LivePosition, ProjectedPosition } from '../types';
+import type { LivePosition, PaceEstimate, ProjectedPosition } from '../types';
 
 export function computeTotalDistanceMeters(
   line: GeoJSON.Feature<GeoJSON.LineString>,
@@ -50,6 +50,27 @@ export function projectPosition(
     projectedLat,
     projectedLng,
   };
+}
+
+const MIN_MOVING_SPEED_MPS = 0.1;
+
+/** Average pace since `elapsedSeconds` ago, used for a stable ETA (raw instant
+ * speed is too jittery to estimate a remaining time from). */
+export function computePaceEstimate(
+  distanceAlongTrackMeters: number,
+  totalDistanceMeters: number,
+  elapsedSeconds: number,
+): PaceEstimate | null {
+  if (elapsedSeconds <= 0) return null;
+
+  const averageSpeedMetersPerSecond = distanceAlongTrackMeters / elapsedSeconds;
+  const remainingDistanceMeters = Math.max(0, totalDistanceMeters - distanceAlongTrackMeters);
+  const remainingSeconds =
+    averageSpeedMetersPerSecond > MIN_MOVING_SPEED_MPS
+      ? remainingDistanceMeters / averageSpeedMetersPerSecond
+      : null;
+
+  return { averageSpeedMetersPerSecond, remainingDistanceMeters, remainingSeconds };
 }
 
 const SIMPLIFY_POINT_THRESHOLD = 2000;

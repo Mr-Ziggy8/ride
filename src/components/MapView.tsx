@@ -1,5 +1,5 @@
-import { useEffect, useMemo } from 'react';
-import { MapContainer, TileLayer, Polyline, Marker, useMap } from 'react-leaflet';
+import { useEffect, useMemo, useState } from 'react';
+import { MapContainer, TileLayer, Polyline, Marker, useMap, useMapEvents } from 'react-leaflet';
 import { divIcon, type DivIcon, type LatLngBoundsLiteral, type LatLngTuple } from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { Compass } from './Compass';
@@ -53,13 +53,26 @@ function InvalidateSizeOnResize() {
   return null;
 }
 
-/** Keeps the map panned to the live position, without touching zoom. */
-function FollowPosition({ position }: { position: LivePosition | null }) {
+/** Keeps the map panned to the live position, without touching zoom — until the
+ * user manually drags the map, at which point it backs off until re-enabled. */
+function FollowPosition({
+  position,
+  isFollowing,
+  onUserPanned,
+}: {
+  position: LivePosition | null;
+  isFollowing: boolean;
+  onUserPanned: () => void;
+}) {
   const map = useMap();
+
+  useMapEvents({ dragstart: onUserPanned });
+
   useEffect(() => {
-    if (!position) return;
+    if (!isFollowing || !position) return;
     map.panTo([position.lat, position.lng], { animate: true });
-  }, [map, position]);
+  }, [map, position, isFollowing]);
+
   return null;
 }
 
@@ -71,6 +84,7 @@ export interface MapViewProps {
 }
 
 export function MapView({ track, livePosition, projected, isOffTrack }: MapViewProps) {
+  const [isFollowing, setIsFollowing] = useState(true);
   const positions = useMemo(
     () => toLatLngTuples(simplifyForDisplay(track.geojson).geometry.coordinates),
     [track],
@@ -81,7 +95,11 @@ export function MapView({ track, livePosition, projected, isOffTrack }: MapViewP
     <div className="map-view-wrapper">
       <MapContainer className="map-view" bounds={bounds} boundsOptions={{ padding: [40, 40] }}>
         <InvalidateSizeOnResize />
-        <FollowPosition position={livePosition} />
+        <FollowPosition
+          position={livePosition}
+          isFollowing={isFollowing}
+          onUserPanned={() => setIsFollowing(false)}
+        />
         <TileLayer url={TILE_URL} attribution={TILE_ATTRIBUTION} detectRetina />
         <Polyline positions={positions} pathOptions={{ color: '#2563eb', weight: 4 }} />
         {livePosition && (
@@ -93,6 +111,11 @@ export function MapView({ track, livePosition, projected, isOffTrack }: MapViewP
         {projected && <Marker position={[projected.projectedLat, projected.projectedLng]} icon={PROJECTED_ICON} />}
       </MapContainer>
       {livePosition && <Compass heading={livePosition.heading} />}
+      {livePosition && !isFollowing && (
+        <button type="button" className="recenter-button" onClick={() => setIsFollowing(true)}>
+          Recentrer
+        </button>
+      )}
     </div>
   );
 }

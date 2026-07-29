@@ -187,6 +187,23 @@ h1 {
   fill: var(--text-dim);
 }
 
+.recenter-button {
+  position: absolute;
+  bottom: 12px;
+  left: 12px;
+  z-index: 1000;
+  font: inherit;
+  font-weight: 600;
+  font-size: 13px;
+  padding: 8px 14px;
+  border-radius: 20px;
+  border: none;
+  background: var(--accent);
+  color: var(--accent-text);
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
 .projected-marker {
   width: 10px;
   height: 10px;

@@ -1,5 +1,5 @@
 import type { ChangeEvent } from 'react';
-import type { ProjectedPosition, TrackData } from '../types';
+import type { PaceEstimate, ProjectedPosition, TrackData } from '../types';
 
 export interface ProgressPanelProps {
   track: TrackData;
@@ -7,6 +7,15 @@ export interface ProgressPanelProps {
   isOffTrack: boolean;
   offTrackThresholdMeters: number;
   onOffTrackThresholdChange: (value: number) => void;
+  speedMetersPerSecond: number | null;
+  paceEstimate: PaceEstimate | null;
+}
+
+function formatDuration(totalSeconds: number): string {
+  const totalMinutes = Math.round(totalSeconds / 60);
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  return hours > 0 ? `${hours} h ${minutes.toString().padStart(2, '0')}` : `${minutes} min`;
 }
 
 export function ProgressPanel({
@@ -15,11 +24,14 @@ export function ProgressPanel({
   isOffTrack,
   offTrackThresholdMeters,
   onOffTrackThresholdChange,
+  speedMetersPerSecond,
+  paceEstimate,
 }: ProgressPanelProps) {
   const totalKm = track.totalDistanceMeters / 1000;
   const traveledKm = (projected?.distanceAlongTrackMeters ?? 0) / 1000;
   const percent = projected?.percentComplete ?? 0;
   const offset = projected?.perpendicularOffsetMeters ?? null;
+  const speedKmh = speedMetersPerSecond !== null ? speedMetersPerSecond * 3.6 : null;
 
   const handleThresholdChange = (event: ChangeEvent<HTMLInputElement>) => {
     const value = Number(event.target.value);
@@ -54,6 +66,17 @@ export function ProgressPanel({
         <div className="progress-stat">
           <dt>Écart au tracé</dt>
           <dd>{offset !== null ? `${offset.toFixed(1)} m` : '—'}</dd>
+        </div>
+      </dl>
+
+      <dl className="progress-stats">
+        <div className="progress-stat">
+          <dt>Vitesse</dt>
+          <dd>{speedKmh !== null ? `${speedKmh.toFixed(1)} km/h` : '—'}</dd>
+        </div>
+        <div className="progress-stat">
+          <dt>Temps restant</dt>
+          <dd>{paceEstimate?.remainingSeconds != null ? formatDuration(paceEstimate.remainingSeconds) : '—'}</dd>
         </div>
       </dl>
 

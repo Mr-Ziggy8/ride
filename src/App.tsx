@@ -5,15 +5,18 @@ import { ProgressPanel } from './components/ProgressPanel';
 import { ElevationChart } from './components/ElevationChart';
 import { useGeolocation } from './hooks/useGeolocation';
 import { useWakeLock } from './hooks/useWakeLock';
-import { projectPosition } from './utils/trackMath';
+import { computePaceEstimate, projectPosition } from './utils/trackMath';
+import { clearStoredTrack, loadStoredTrack, storeTrack } from './utils/trackStorage';
 import type { GpxParseResult } from './utils/gpxParser';
 import type { TrackData } from './types';
 
 const DEFAULT_OFF_TRACK_THRESHOLD_METERS = 50;
 
+const storedOnLoad = loadStoredTrack();
+
 function App() {
-  const [track, setTrack] = useState<TrackData | null>(null);
-  const [warning, setWarning] = useState<string | null>(null);
+  const [track, setTrack] = useState<TrackData | null>(storedOnLoad?.track ?? null);
+  const [warning, setWarning] = useState<string | null>(storedOnLoad?.warning ?? null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [offTrackThresholdMeters, setOffTrackThresholdMeters] = useState(
     DEFAULT_OFF_TRACK_THRESHOLD_METERS,
@@ -29,10 +32,17 @@ function App() {
 
   const isOffTrack = projected !== null && projected.perpendicularOffsetMeters > offTrackThresholdMeters;
 
+  const paceEstimate = useMemo(() => {
+    if (!track || !projected || geo.sessionStartMs === null || !geo.position) return null;
+    const elapsedSeconds = (geo.position.timestampMs - geo.sessionStartMs) / 1000;
+    return computePaceEstimate(projected.distanceAlongTrackMeters, track.totalDistanceMeters, elapsedSeconds);
+  }, [track, projected, geo.sessionStartMs, geo.position]);
+
   const handleParsed = (result: GpxParseResult) => {
     setTrack(result.track);
     setWarning(result.warning);
     setUploadError(null);
+    storeTrack({ track: result.track, warning: result.warning });
   };
 
   const handleStartTracking = () => {
@@ -51,6 +61,7 @@ function App() {
     setTrack(null);
     setWarning(null);
     setUploadError(null);
+    clearStoredTrack();
   };
 
   return (
@@ -102,6 +113,8 @@ function App() {
             isOffTrack={isOffTrack}
             offTrackThresholdMeters={offTrackThresholdMeters}
             onOffTrackThresholdChange={setOffTrackThresholdMeters}
+            speedMetersPerSecond={geo.position?.speedMetersPerSecond ?? null}
+            paceEstimate={paceEstimate}
           />
 
           {track.hasElevation && track.elevationProfile && (

@@ -5,6 +5,8 @@ export interface UseGeolocationResult {
   position: LivePosition | null;
   error: GeolocationErrorInfo | null;
   isTracking: boolean;
+  /** Timestamp (ms) of the first fix of the current tracking session, for pace/ETA math. */
+  sessionStartMs: number | null;
   start: () => void;
   stop: () => void;
   reset: () => void;
@@ -39,7 +41,9 @@ export function useGeolocation(): UseGeolocationResult {
   const [position, setPosition] = useState<LivePosition | null>(null);
   const [error, setError] = useState<GeolocationErrorInfo | null>(null);
   const [isTracking, setIsTracking] = useState(false);
+  const [sessionStartMs, setSessionStartMs] = useState<number | null>(null);
   const watchIdRef = useRef<number | null>(null);
+  const sessionStartRef = useRef<number | null>(null);
 
   const clearActiveWatch = useCallback(() => {
     if (watchIdRef.current !== null) {
@@ -58,6 +62,8 @@ export function useGeolocation(): UseGeolocationResult {
     setIsTracking(false);
     setPosition(null);
     setError(null);
+    sessionStartRef.current = null;
+    setSessionStartMs(null);
   }, [clearActiveWatch]);
 
   const start = useCallback(() => {
@@ -74,12 +80,17 @@ export function useGeolocation(): UseGeolocationResult {
 
     watchIdRef.current = navigator.geolocation.watchPosition(
       (pos) => {
+        if (sessionStartRef.current === null) {
+          sessionStartRef.current = pos.timestamp;
+          setSessionStartMs(pos.timestamp);
+        }
         setPosition({
           lat: pos.coords.latitude,
           lng: pos.coords.longitude,
           accuracyMeters: pos.coords.accuracy,
           timestampMs: pos.timestamp,
           heading: pos.coords.heading,
+          speedMetersPerSecond: pos.coords.speed,
         });
         setError(null);
       },
@@ -98,5 +109,5 @@ export function useGeolocation(): UseGeolocationResult {
 
   useEffect(() => clearActiveWatch, [clearActiveWatch]);
 
-  return { position, error, isTracking, start, stop, reset };
+  return { position, error, isTracking, sessionStartMs, start, stop, reset };
 }
