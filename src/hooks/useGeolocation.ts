@@ -79,6 +79,7 @@ export function useGeolocation(): UseGeolocationResult {
           lng: pos.coords.longitude,
           accuracyMeters: pos.coords.accuracy,
           timestampMs: pos.timestamp,
+          heading: pos.coords.heading,
         });
         setError(null);
       },

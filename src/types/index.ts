@@ -16,6 +16,8 @@ export interface LivePosition {
   lng: number;
   accuracyMeters: number;
   timestampMs: number;
+  /** Degrees clockwise from true north, or null when the device is stationary/unknown. */
+  heading: number | null;
 }
 
 export interface ProjectedPosition {
