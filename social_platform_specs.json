@@ -1,0 +1,241 @@
+{
+  "project_name": "gpx-live-tracker",
+  "spec_id": "social_platform_v1",
+  "phase": "2 - plateforme sociale",
+  "based_on": "gpx_tracker_specs.json (phase 1 : app solo, sans backend, un seul track en localStorage)",
+  "description": "Transformation de l'app solo GPX Live Tracker en un réseau social moto gratuit et transparent : comptes utilisateurs, sauvegarde cloud des parcours (enregistrés en live ou uploadés), visibilité public/privé, favoris, paramètres (unités, thème, langue), et un cockpit de statistiques de pilotage.",
+  "vision": "100% gratuit, pas de dark patterns, pas de collecte de données cachée. Toute monétisation future doit rester optionnelle et ne jamais dégrader l'expérience de base.",
+  "target_platform": "Android Chrome en priorité (inchangé), le multi-device devient pertinent car les comptes/parcours doivent être consultables depuis n'importe quel appareil une fois connecté.",
+
+  "constraint_changes_from_phase_1": {
+    "no_backend": "Assoupli, pas annulé : Firebase (Auth/Firestore/Storage) est un backend managé consommé directement depuis le client via le SDK JS, autorisé par des Security Rules. Aucun serveur Node/Express, aucune fonction serverless Vercel n'est nécessaire pour ce lot de features. La seule feature de ce document qui casserait vraiment ce principe est le paywall (voir backlog_deferred.premium_analytics_paywall) — elle est explicitement repoussée pour cette raison.",
+    "no_database": "Annulé : Cloud Firestore (mode natif) uniquement. Firebase Storage écarté (voir decisions_log.no_firebase_storage) - la géométrie des parcours (déjà simplifiée par turf simplify) est stockée directement dans le document Firestore, pas de fichier séparé.",
+    "no_auth": "Annulé : Firebase Authentication.",
+    "no_multi_user_sharing": "Annulé : parcours publics/privés, favoris entre utilisateurs.",
+    "offline_map_tiles": "Inchangé, hors scope.",
+    "usage_sans_compte": "Le flux actuel (upload GPX + suivi live) doit rester utilisable sans connexion, pour ne pas forcer la création de compte juste pour l'usage de base. L'auth ne gate que : sauvegarde cloud, enregistrement de parcours, favoris, cockpit, réglages synchronisés."
+  },
+
+  "tech_stack_additions": {
+    "auth": "Firebase Authentication - Google uniquement (decide). Zero formulaire d'inscription/reset/verification d'email a construire. Pas de telephone/SMS (payant sur Firebase, hors budget '100% gratuit'). Email/mot de passe explicitement ecarte pour ce lot, a reconsiderer seulement si des utilisateurs sans compte Google le demandent.",
+    "database": "Cloud Firestore, mode natif.",
+    "file_storage": "Volontairement absent. Firebase Storage exige le plan Blaze (carte bancaire) sur un nouveau projet depuis fin 2024, meme pour un usage sous les quotas gratuits - incompatible avec la contrainte '100% gratuit, jamais de carte'. A la place, la geometrie simplifiee (turf simplify, deja utilisee pour l'affichage) est stockee directement dans rides/{rideId}.trackPoints (tableau d'objets {lng,lat,ele}, pas un tableau de paires brutes - voir decisions_log.firestore_nested_arrays_unsupported). Un export .gpx reste possible en le regenerant a la volee cote client depuis cette geometrie, sans jamais persister de fichier. Voir decisions_log.no_firebase_storage.",
+    "routing": "Ajout d'un routeur client léger (react-router-dom ou wouter) pour des URLs réelles : /ride/:id (lien partageable d'un parcours public), /decouverte (feed public), /cockpit, /favoris, /mes-parcours. Absent aujourd'hui (App.tsx fait tout en state conditionnel).",
+    "i18n": "react-i18next (decide). Standard, gere proprement pluriels/interpolation/formatage pour les 6 langues ; le cout de bundle (~15-20kb gzip) est accepte plutot que de re-implementer les regles de pluriel a la main pour 6 locales.",
+    "state_management": "Toujours pas de Redux/Zustand. Ajout de React Context pour : utilisateur auth courant, préférences (unité/thème/langue), état d'enregistrement de parcours en cours.",
+    "hosting": "Vercel inchangé, toujours du statique pur (SPA). Aucune fonction serverless ajoutée dans ce lot."
+  },
+
+  "features": [
+    {
+      "id": "auth_firebase",
+      "priority": "must_have",
+      "description": "Connexion via Firebase Auth, Google uniquement (decide - pas d'email/mot de passe pour ce lot). Etat de session persistant (onAuthStateChanged). Le profil (users/{uid}) est créé au premier login. L'app reste utilisable en mode invité pour l'upload + suivi live déjà existants."
+    },
+    {
+      "id": "firestore_rides_persistence",
+      "priority": "must_have",
+      "description": "Sauvegarde d'un parcours (uploadé ou enregistré) : métadonnées + stats + géométrie simplifiée (turf simplify, déjà utilisé côté affichage) dans un seul document Firestore (rides/{rideId}, champ trackPoints - tableau d'objets {lng,lat,ele}, voir decisions_log.firestore_nested_arrays_unsupported). Pas de fichier séparé (pas de Firebase Storage, voir decisions_log.no_firebase_storage) - un export .gpx à la demande est régénéré côté client depuis trackPoints quand un utilisateur le souhaite."
+    },
+    {
+      "id": "settings_sidebar",
+      "priority": "must_have",
+      "description": "Sidebar (drawer) accessible depuis un bouton menu, contenant : toggle unité de distance (métrique/impérial), toggle unité carburant (litres/gallons) - deux réglages indépendants (décidé, couvre le cas UK: miles + litres) -, toggle thème (clair/sombre/système), sélecteur de langue (FR/EN/NL/DE/ES/IT). Persisté dans localStorage si invité, synchronisé vers users/{uid}.settings si connecté (avec migration locale -> cloud au login, voir local_to_cloud_migration)."
+    },
+    {
+      "id": "unit_system_conversion",
+      "priority": "must_have",
+      "description": "Changer l'unité recalcule les valeurs affichées, ne se contente pas de changer le libellé. Le modele de donnees interne est deja 100% SI (metres, m/s - confirme dans trackMath.ts/types/index.ts), donc la conversion est purement une couche d'affichage : formatDistance(meters, unitSystem) et formatSpeed(mps, unitSystem) lisent le reglage distance, formatVolume(liters, fuelUnit) lit le reglage carburant independamment (deux reglages separes, decide) - utilisees partout, y compris dans ProgressPanel.tsx qui aujourd'hui calcule et affiche du km en dur (traveledKm/totalKm/speedKmh).",
+      "constants": {
+        "meters_per_mile": 1609.344,
+        "liters_per_us_gallon": 3.785411784,
+        "mps_to_kmh": 3.6,
+        "mps_to_mph": 2.236936
+      }
+    },
+    {
+      "id": "i18n_localization",
+      "priority": "must_have",
+      "description": "Support FR/EN/NL/DE/ES/IT. Necessite l'extraction de toutes les chaines actuellement en dur (App.tsx: 'Reinitialiser', 'Demarrer le suivi', 'Arreter le suivi' ; useGeolocation.ts: messages d'erreur geolocalisation ; ProgressPanel/GpxUploader/Compass/ElevationChart) vers des dictionnaires de traduction. Langue par defaut = langue du navigateur si supportee, sinon EN, avec override manuel persistant."
+    },
+    {
+      "id": "dark_mode_theme",
+      "priority": "must_have",
+      "description": "Aujourd'hui `color-scheme: dark` est fige en dur dans index.css (pas de vrai mode clair). Refactor vers des variables CSS (custom properties) + attribut data-theme, avec 3 etats : clair / sombre / systeme (prefers-color-scheme par defaut), choix persiste comme les autres reglages."
+    },
+    {
+      "id": "route_recording",
+      "priority": "must_have",
+      "description": "Bouton 'Nouveau parcours' -> demarre un enregistrement GPS (etat 'recording'). Bouton 'Fini' -> arrete, calcule les stats finales, ouvre un dialogue de sauvegarde (titre, visibilite publique/privee). Voir state_machines.route_recording pour le detail des transitions et la strategie de bufferisation locale."
+    },
+    {
+      "id": "route_visibility_public_private",
+      "priority": "must_have",
+      "description": "Choix public/prive au moment de la sauvegarde, modifiable ensuite depuis 'Mes parcours'. Prive par defaut (opt-in au partage, pas opt-out). Impose par les Security Rules Firestore, pas seulement par l'UI."
+    },
+    {
+      "id": "public_feed_discovery",
+      "priority": "must_have",
+      "description": "Vue 'Decouverte' listant les parcours publics de tous les utilisateurs (pas seulement les siens), tri anti-chronologique, paginee (ex: 20 par page, chargement a la demande, pas de listener temps reel). Chaque document ride se suffit a lui-meme pour l'affichage en liste (trackPoints deja inline, pas de requete additionnelle). Necessite un index Firestore composite (visibility ASC, createdAt DESC). Decide suite a la question 'que donne le public' - scope plus large que le simple lien partageable, voir scaling_and_free_tier_risks pour l'impact sur les lectures."
+    },
+    {
+      "id": "my_rides_library",
+      "priority": "must_have",
+      "description": "Vue 'Mes parcours' listant les parcours de l'utilisateur (enregistres + uploades sauvegardes), avec acces aux actions favoris/suppression/changement de visibilite. Pas demande explicitement dans le brief mais necessaire structurellement : delete/favoris/visibilite n'ont nulle part ou vivre sans cette vue."
+    },
+    {
+      "id": "favorites",
+      "priority": "must_have",
+      "description": "Ajouter un parcours (public, le sien ou celui d'un tiers) a une liste de favoris personnelle (users/{uid}/favorites), consultable et re-chargeable comme track a suivre depuis n'importe quel appareil."
+    },
+    {
+      "id": "ride_deletion_with_confirmation",
+      "priority": "must_have",
+      "description": "Suppression irreversible avec confirmation a friction volontairement elevee (ex: taper le nom du parcours, ou double confirmation modale) — pas de corbeille, pas d'undo, conformement a la demande. Cascade : suppression du document Firestore (contient toute la donnee, plus de fichier Storage a nettoyer en parallele) et retrait des favoris des autres utilisateurs qui l'auraient favori (voir decisions_log.delete_favorited_by_others)."
+    },
+    {
+      "id": "pilot_cockpit_stats",
+      "priority": "must_have",
+      "description": "Vue 'cockpit' : distance parcourue sur 28 derniers jours / 3 derniers mois / 12 derniers mois, agregee depuis l'historique des parcours de l'utilisateur (recorded + follow-along d'un GPX uploade, tant qu'il y a eu tracking GPS reel - un simple upload jamais suivi ne compte pas comme du kilometrage roule)."
+    },
+    {
+      "id": "fuel_log",
+      "priority": "must_have",
+      "description": "Enregistrement des passages a la pompe : volume (litres ou gallons, unite depuis les reglages), distance parcourue depuis le dernier plein. Distance auto-calculee par defaut (somme des parcours entre deux pleins), ajustable manuellement pour couvrir les trajets non enregistres dans l'app. Permet d'afficher une consommation (L/100km ou MPG)."
+    },
+    {
+      "id": "local_to_cloud_migration",
+      "priority": "nice_to_have",
+      "description": "Au premier login, si un track existe dans localStorage (trackStorage.ts, cle 'gpx-live-tracker:track'), proposer de l'importer comme premier parcours prive dans Firestore, pour ne pas faire perdre leur trace aux utilisateurs actuels de la version solo."
+    },
+    {
+      "id": "offline_safe_recording",
+      "priority": "must_have",
+      "description": "Contrainte technique non negociable : pendant l'enregistrement, aucune ecriture Firestore point-par-point (couteux en quota, et invivable en zone blanche/montagne). Les points GPS sont bufferises en memoire + IndexedDB/localStorage (meme logique de resilience que trackStorage.ts aujourd'hui), avec echantillonnage minimal entre points stockes (ex: >=5s ou >=10m). Une seule ecriture Firestore au moment du 'Fini' + sauvegarde (plus d'upload Storage separe)."
+    }
+  ],
+
+  "data_models": {
+    "firestore": {
+      "users/{uid}": {
+        "displayName": "string",
+        "photoURL": "string | null (fourni par le provider auth, pas d'upload utilisateur)",
+        "createdAt": "timestamp",
+        "settings": {
+          "unitSystem": "'metric' | 'imperial'",
+          "fuelUnit": "'liters' | 'gallons'",
+          "theme": "'light' | 'dark' | 'system'",
+          "language": "'fr' | 'en' | 'nl' | 'de' | 'es' | 'it'"
+        }
+      },
+      "rides/{rideId}": {
+        "ownerId": "string (uid)",
+        "title": "string",
+        "source": "'recorded' | 'uploaded'",
+        "visibility": "'public' | 'private'",
+        "createdAt": "timestamp",
+        "startedAt": "timestamp",
+        "endedAt": "timestamp",
+        "distanceCoveredMeters": "number (distance reellement parcourue en GPS, pas forcement = longueur totale du track si suivi partiel)",
+        "totalTrackDistanceMeters": "number",
+        "elevationGainMeters": "number | null",
+        "maxSpeedMetersPerSecond": "number | null",
+        "avgSpeedMetersPerSecond": "number | null",
+        "trackPoints": "Array<{lng: number, lat: number, ele: number | null}> - PAS un GeoJSON.LineString brut : Firestore n'accepte pas les tableaux imbriques, incompatible avec des coordinates [[lng,lat],...] (voir decisions_log.firestore_nested_arrays_unsupported). Simplifie via turf simplify, plafonne a SIMPLIFY_POINT_THRESHOLD=2000 points comme aujourd'hui pour l'affichage - c'est la SEULE geometrie stockee, sert a la fois de preview liste/feed et de trace complete pour le suivi live. Reste confortablement sous la limite Firestore de 1 MiB/document.",
+        "bounds": "[number, number, number, number]"
+      },
+      "users/{uid}/favorites/{rideId}": {
+        "rideId": "string",
+        "favoritedAt": "timestamp"
+      },
+      "users/{uid}/fuelLogs/{entryId}": {
+        "date": "timestamp",
+        "volume": "number (dans l'unite au moment de la saisie, convertie a l'affichage)",
+        "distanceSinceLastFillMeters": "number",
+        "isDistanceManuallyAdjusted": "boolean"
+      }
+    }
+  },
+
+  "state_machines": {
+    "route_recording": {
+      "states": ["idle", "recording", "finished_pending_save"],
+      "transitions": [
+        "idle --[Nouveau parcours]--> recording : demarre watchPosition, cree un buffer local vide, active le wake lock (hook existant)",
+        "recording --[Fini]--> finished_pending_save : arrete watchPosition, calcule les stats finales, ouvre le dialogue de sauvegarde (titre par defaut = date/heure, visibilite par defaut = privee)",
+        "finished_pending_save --[Enregistrer]--> idle : simplifie la geometrie (turf simplify), aplatit en trackPoints, ecrit le doc Firestore, vide le buffer local",
+        "finished_pending_save --[Annuler]--> idle : vide le buffer local, rien n'est persiste"
+      ]
+    }
+  },
+
+  "security_rules_requirements": [
+    "rides: lecture si visibility == 'public' OU request.auth.uid == ownerId ; ecriture/suppression uniquement si request.auth.uid == ownerId",
+    "users/{uid}/favorites: lecture/ecriture uniquement par le proprietaire (request.auth.uid == uid)",
+    "users/{uid}/fuelLogs: lecture/ecriture uniquement par le proprietaire, jamais public",
+    "Aucune Cloud Function requise pour ces regles : tout est evaluable cote client via les Security Rules Firestore standard.",
+    "Pas de Storage Security Rules : Firebase Storage n'est pas utilise (voir decisions_log.no_firebase_storage)."
+  ],
+
+  "open_questions": [],
+
+  "decisions_log": [
+    { "id": "auth_providers", "decision": "Google uniquement", "source": "utilisateur" },
+    { "id": "i18n_library", "decision": "react-i18next", "source": "utilisateur" },
+    { "id": "public_visibility_scope", "decision": "Lien partageable + feed de decouverte (pas seulement le lien)", "source": "utilisateur" },
+    { "id": "unit_toggle_granularity", "decision": "Deux toggles independants : unite distance/vitesse, unite carburant", "source": "utilisateur" },
+    { "id": "delete_favorited_by_others", "decision": "Retrait silencieux de la liste de favoris de l'autre utilisateur, pas de reference 'parcours supprime' conservee", "source": "defaut propose par Claude, a corriger si desaccord" },
+    { "id": "single_vehicle_assumption", "decision": "fuel_log suppose une seule moto par utilisateur, pas de garage multi-vehicules", "source": "defaut propose par Claude, a corriger si desaccord" },
+    { "id": "no_firebase_storage", "decision": "Firebase Storage abandonne. Decouvert au moment du deploy des rules : un nouveau projet Firebase exige le plan Blaze (carte bancaire) pour activer Storage, meme sous quota gratuit - incompatible avec la contrainte '100% gratuit, jamais de carte'. La geometrie simplifiee (turf simplify) est stockee directement dans rides/{rideId}.trackPoints (Firestore seul, plan Spark, aucune carte requise). L'export .gpx devient une regeneration a la volee cote client, pas un fichier persiste.", "source": "utilisateur (contrainte cout) + Claude (solution technique)" },
+    { "id": "firestore_nested_arrays_unsupported", "decision": "Firestore refuse les tableaux imbriques (un tableau dont un element est lui-meme un tableau) - incompatible avec des coordinates GeoJSON brutes ([[lng,lat],[lng,lat],...]). Decouvert au premier essai de sauvegarde (addDoc echouait, remontait en 'Echec de la sauvegarde' generique cote UI). Toute geometrie de parcours stockee doit etre aplatie en tableau d'objets {lng,lat,ele} (trackPoints), jamais en tableau de paires/triplets bruts. S'applique aussi a route_recording des qu'il ecrira de la geometrie.", "source": "decouverte en test, Claude (diagnostic + correctif)" },
+    { "id": "firestore_composite_index_required", "decision": "Toute query Firestore combinant un filtre d'egalite (where ownerId == uid) ET un orderBy sur un CHAMP DIFFERENT (createdAt) exige un index composite explicite - Firestore ne le cree jamais automatiquement, meme si le filtre d'egalite semble 'evident'. Decouvert sur listMyRides (rides ou ownerId == uid, orderBy createdAt desc) : echec silencieux remonte en 'Impossible de charger tes parcours' generique. Corrige en declarant l'index dans firestore.indexes.json (deploye via firebase deploy --only firestore:indexes) plutot que de compter sur le lien auto-genere dans l'erreur navigateur. S'applique aussi a public_feed_discovery (visibility == 'public', orderBy createdAt desc) qui aura besoin de son propre index composite le moment venu.", "source": "decouverte en test, Claude (diagnostic + correctif)" }
+  ],
+
+  "backlog_deferred": [
+    {
+      "id": "photo_uploads",
+      "reason": "Explicitement repousse par l'utilisateur pour ce lot."
+    },
+    {
+      "id": "ride_ratings",
+      "reason": "Explicitement repousse par l'utilisateur pour ce lot."
+    },
+    {
+      "id": "ad_banner",
+      "reason": "Techniquement trivial (bandeau bas de page), mais le vrai cout est ailleurs : une regie type AdSense implique des trackers tiers -> bandeau de consentement RGPD obligatoire (l'app n'en a besoin d'aucun aujourd'hui), et entre en tension directe avec le positionnement '100% gratuit et transparent'. A ne considerer que si un vrai volume d'usage le justifie, et plutot via une regie respectueuse de la vie privee (ex: EthicalAds) qui n'a pas besoin de banniere de consentement (pas de cookies/tracking), quitte a accepter un revenu faible."
+    },
+    {
+      "id": "premium_analytics_paywall",
+      "reason": "Modele coherent avec l'ethique du projet (paiement volontaire pour de la valeur ajoutee, pas de pub ni de tracking imposes a tous) et deja precedent chez Strava/Komoot pour ce type de features. VMax et inclinaison sont deja quasi gratuits a calculer (speedMetersPerSecond existe deja dans LivePosition, le profil d'elevation existe deja en phase 1 comme nice_to_have) - le 'premium' serait surtout un gate d'UI/UX (comparaisons entre parcours, visualisations avancees, segments), pas un vrai cout de calcul. Le point important : la brique de paiement (Stripe ou equivalent) est la premiere feature qui casserait reellement le 'no_backend' - un webhook de paiement doit etre verifie cote serveur (signature secrete), ce qu'aucune Security Rule Firestore ne peut faire seule. A traiter comme une phase 3 a part, avec une petite fonction serverless dediee (Vercel function ou Cloud Function), le jour ou il y a un vrai besoin de revenu."
+    }
+  ],
+
+  "scaling_and_free_tier_risks": {
+    "firestore_spark_plan": "1 GiB stockage, 50k lectures/jour, 20k ecritures/jour, 20k suppressions/jour. Le risque reel est les LECTURES (parcourir 'mes parcours', favoris, et maintenant le feed de decouverte public) bien plus que les ecritures (peu frequentes : login, fin d'enregistrement, ajout favori). Le choix d'un feed de decouverte (plutot que lien seul) augmente ce risque : chaque visite de la vue Decouverte lit N documents rides. Mitigation obligatoire des le depart : pagination stricte (ex 20/page), get() ponctuel au lieu d'un listener onSnapshot permanent sur le feed. Chaque doc ride reste petit (trackPoints plafonne a ~2000 points, quelques centaines de Ko max), donc le quota de 1 GiB de stockage total tient largement.",
+    "no_firebase_storage": "Firebase Storage ecarte du projet (voir decisions_log.no_firebase_storage) : un nouveau projet exige le plan Blaze pour l'activer, meme sous quota gratuit. Toute la donnee vit dans Firestore (Spark, gratuit, aucune carte), la geometrie des parcours etant deja assez petite une fois simplifiee pour tenir dans un document.",
+    "vercel_hobby_plan": "Non-probleme tant que Vercel ne sert que du statique (pas de fonctions serverless dans ce lot) - le hosting n'a aucune raison de scaler differemment d'aujourd'hui. Redevient un vrai sujet uniquement si premium_analytics_paywall (webhook Stripe) est implemente plus tard.",
+    "real_blocking_points_beyond_quotas": [
+      "Security Rules correctes : c'est la vraie difficulte technique, pas le quota gratuit. Sans backend, les rules Firestore/Storage sont l'unique rempart entre 'prive' et 'tout le monde peut lire'. Une regle mal ecrite = fuite de donnees privees ou fonctionnalite cassee.",
+      "Connectivite pendant l'enregistrement : un parcours moto se fait souvent en zone rurale/montagne avec reseau instable - d'ou offline_safe_recording (bufferisation locale + ecriture unique a la fin) comme contrainte non negociable, pas juste une optimisation.",
+      "Moderation de contenu public : des que des parcours sont publics (meme sans photos/notes), un titre de parcours inapproprie reste possible. Pas de backend = pas d'equipe de moderation. Prevoir au minimum un mecanisme de signalement + suppression admin manuelle, meme rudimentaire.",
+      "Fiabilite des stats (cockpit, fuel log) : rien n'empeche techniquement un GPX fabrique de fausser le kilometrage. Enjeu faible pour une app gratuite sans classement/competition, donc pas de sur-ingenierie anti-triche a prevoir, juste ne pas construire de feature qui donnerait un vrai avantage a tricher (ex: classement public) sans y avoir reflechi.",
+      "Migration des utilisateurs actuels : le track solo existant en localStorage doit avoir un chemin de migration (voir local_to_cloud_migration), sinon les premiers utilisateurs perdent leur historique en basculant sur cette version."
+    ]
+  },
+
+  "acceptance_criteria": [
+    "Un utilisateur peut se connecter avec Google et son profil est cree/retrouve dans users/{uid}",
+    "L'upload GPX + suivi live existants restent utilisables sans etre connecte",
+    "'Nouveau parcours' puis 'Fini' ouvre un dialogue de sauvegarde titre + visibilite avant toute ecriture Firestore",
+    "Un reload accidentel de l'onglet pendant un enregistrement ne perd pas les points deja bufferises",
+    "Changer l'unite km -> miles recalcule immediatement toutes les distances/vitesses affichees avec le bon facteur de conversion, sans toucher aux donnees stockees",
+    "Supprimer un parcours exige une confirmation a friction elevee et est irreversible",
+    "Le cockpit affiche des totaux corrects sur 28 jours / 3 mois / 12 mois bases sur l'historique reel des parcours de l'utilisateur",
+    "Un plein logue affiche une consommation calculee (volume / distance depuis le dernier plein) dans l'unite choisie",
+    "Mettre un parcours public en favori l'ajoute a 'Mes favoris', retrouvable sur un autre appareil apres connexion",
+    "La vue Decouverte liste les parcours publics de tous les utilisateurs, tri anti-chronologique, paginee sans listener temps reel",
+    "Aucune Security Rule ne permet a un utilisateur de lire les favoris, fuelLogs, ou parcours prives d'un autre utilisateur",
+    "L'interface est integralement traduite dans les 6 langues, sans chaine francaise en dur restante hors dictionnaires",
+    "Le mode sombre respecte la preference systeme par defaut et peut etre force manuellement, choix persistant"
+  ]
+}

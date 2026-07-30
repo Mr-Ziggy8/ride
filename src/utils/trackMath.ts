@@ -1,7 +1,7 @@
 import length from '@turf/length';
 import nearestPointOnLine from '@turf/nearest-point-on-line';
 import simplify from '@turf/simplify';
-import type { LivePosition, PaceEstimate, ProjectedPosition } from '../types';
+import type { LivePosition, PaceEstimate, ProjectedPosition, StoredTrackPoint } from '../types';
 
 export function computeTotalDistanceMeters(
   line: GeoJSON.Feature<GeoJSON.LineString>,
@@ -83,4 +83,37 @@ export function simplifyForDisplay(
     return line;
   }
   return simplify(line, { tolerance: SIMPLIFY_TOLERANCE_DEGREES, highQuality: false });
+}
+
+/** Chemin SVG (dans un viewBox width x height) representant la forme macro d'un tracé, sans tuiles de carte. */
+export function buildThumbnailPath(
+  points: StoredTrackPoint[],
+  width: number,
+  height: number,
+  padding: number,
+): string {
+  const lngs = points.map((p) => p.lng);
+  const lats = points.map((p) => p.lat);
+  const minLng = Math.min(...lngs);
+  const maxLng = Math.max(...lngs);
+  const minLat = Math.min(...lats);
+  const maxLat = Math.max(...lats);
+
+  const lngRange = maxLng - minLng || 1;
+  const latRange = maxLat - minLat || 1;
+
+  const availableWidth = width - padding * 2;
+  const availableHeight = height - padding * 2;
+  const scale = Math.min(availableWidth / lngRange, availableHeight / latRange);
+
+  const offsetX = (width - lngRange * scale) / 2;
+  const offsetY = (height - latRange * scale) / 2;
+
+  return points
+    .map((p, i) => {
+      const x = offsetX + (p.lng - minLng) * scale;
+      const y = offsetY + (maxLat - p.lat) * scale; // lat croit vers le nord, y SVG croit vers le bas
+      return `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`;
+    })
+    .join(' ');
 }

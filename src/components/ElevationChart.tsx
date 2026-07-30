@@ -60,7 +60,7 @@ export function ElevationChart({ elevationProfile, currentDistanceMeters }: Elev
         <span>D+ {Math.round(gainMeters)} m</span>
       </div>
       <svg viewBox={`0 0 ${WIDTH} ${HEIGHT}`} className="elevation-chart-svg" preserveAspectRatio="none">
-        <path d={path} fill="none" stroke="#2563eb" strokeWidth={2} />
+        <path d={path} className="elevation-chart-path" />
         {cursor && (
           <>
             <line x1={cursor[0]} y1={0} x2={cursor[0]} y2={HEIGHT} className="elevation-cursor-line" />

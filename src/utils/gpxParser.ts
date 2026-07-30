@@ -53,7 +53,11 @@ function dedupeConsecutive(positions: GeoJSON.Position[]): GeoJSON.Position[] {
   return result;
 }
 
-function buildElevationProfile(positions: GeoJSON.Position[]): ElevationPoint[] {
+export function hasElevationData(positions: GeoJSON.Position[]): boolean {
+  return positions.every((p) => typeof p[2] === 'number' && Number.isFinite(p[2]));
+}
+
+export function buildElevationProfile(positions: GeoJSON.Position[]): ElevationPoint[] {
   const profile: ElevationPoint[] = [];
   let cumulativeMeters = 0;
   for (let i = 0; i < positions.length; i++) {
@@ -99,9 +103,7 @@ export function parseGpx(gpxText: string): GpxParseResult {
     throw new GpxParseError('Ce GPX ne contient aucun tracé exploitable (ni trk ni rte avec au moins 2 points).');
   }
 
-  const hasElevation = positions.every(
-    (p) => typeof p[2] === 'number' && Number.isFinite(p[2]),
-  );
+  const hasElevation = hasElevationData(positions);
   const elevationProfile = hasElevation ? buildElevationProfile(positions) : null;
 
   const coordinates: GeoJSON.Position[] = positions.map(([lng, lat]) => [lng, lat]);

@@ -1,5 +1,6 @@
 import type { ChangeEvent } from 'react';
-import type { PaceEstimate, ProjectedPosition, TrackData } from '../types';
+import { convertDistanceValue, distanceUnitLabel, formatSpeed } from '../utils/units';
+import type { PaceEstimate, ProjectedPosition, TrackData, UnitSystem } from '../types';
 
 export interface ProgressPanelProps {
   track: TrackData;
@@ -9,6 +10,7 @@ export interface ProgressPanelProps {
   onOffTrackThresholdChange: (value: number) => void;
   speedMetersPerSecond: number | null;
   paceEstimate: PaceEstimate | null;
+  unitSystem: UnitSystem;
 }
 
 function formatDuration(totalSeconds: number): string {
@@ -26,12 +28,14 @@ export function ProgressPanel({
   onOffTrackThresholdChange,
   speedMetersPerSecond,
   paceEstimate,
+  unitSystem,
 }: ProgressPanelProps) {
-  const totalKm = track.totalDistanceMeters / 1000;
-  const traveledKm = (projected?.distanceAlongTrackMeters ?? 0) / 1000;
+  const totalDistance = convertDistanceValue(track.totalDistanceMeters, unitSystem);
+  const traveledDistance = convertDistanceValue(projected?.distanceAlongTrackMeters ?? 0, unitSystem);
+  const unitLabel = distanceUnitLabel(unitSystem);
   const percent = projected?.percentComplete ?? 0;
   const offset = projected?.perpendicularOffsetMeters ?? null;
-  const speedKmh = speedMetersPerSecond !== null ? speedMetersPerSecond * 3.6 : null;
+  const speed = speedMetersPerSecond !== null ? formatSpeed(speedMetersPerSecond, unitSystem) : null;
 
   const handleThresholdChange = (event: ChangeEvent<HTMLInputElement>) => {
     const value = Number(event.target.value);
@@ -56,7 +60,7 @@ export function ProgressPanel({
         <div className="progress-stat">
           <dt>Distance</dt>
           <dd>
-            {traveledKm.toFixed(2)} / {totalKm.toFixed(2)} km
+            {traveledDistance.toFixed(2)} / {totalDistance.toFixed(2)} {unitLabel}
           </dd>
         </div>
         <div className="progress-stat">
@@ -72,7 +76,7 @@ export function ProgressPanel({
       <dl className="progress-stats">
         <div className="progress-stat">
           <dt>Vitesse</dt>
-          <dd>{speedKmh !== null ? `${speedKmh.toFixed(1)} km/h` : '—'}</dd>
+          <dd>{speed ?? '—'}</dd>
         </div>
         <div className="progress-stat">
           <dt>Temps restant</dt>

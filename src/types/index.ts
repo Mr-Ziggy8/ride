@@ -48,3 +48,40 @@ export interface GeolocationErrorInfo {
 }
 
 export type WakeLockStatus = 'unsupported' | 'inactive' | 'active' | 'error';
+
+/** Firestore n'accepte pas les tableaux imbriques (coordinates GeoJSON), d'ou ce point aplati. */
+export interface StoredTrackPoint {
+  lng: number;
+  lat: number;
+  ele: number | null;
+}
+
+export type RideVisibility = 'public' | 'private';
+export type RideSource = 'recorded' | 'uploaded';
+
+export interface Ride {
+  id: string;
+  ownerId: string;
+  ownerDisplayName: string;
+  title: string;
+  source: RideSource;
+  visibility: RideVisibility;
+  createdAtMs: number;
+  totalTrackDistanceMeters: number;
+  trackPoints: StoredTrackPoint[];
+  bounds: [number, number, number, number];
+  /** null si la geolocalisation inverse a echoue/timeout au moment de la sauvegarde. */
+  regionLabel: string | null;
+}
+
+export type ThemeMode = 'light' | 'dark' | 'system';
+export type UnitSystem = 'metric' | 'imperial';
+export type FuelUnit = 'liters' | 'gallons';
+export type Language = 'fr' | 'en' | 'nl' | 'de' | 'es' | 'it';
+
+export interface Settings {
+  unitSystem: UnitSystem;
+  fuelUnit: FuelUnit;
+  theme: ThemeMode;
+  language: Language;
+}

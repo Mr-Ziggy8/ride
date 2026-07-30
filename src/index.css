@@ -9,14 +9,80 @@
   --accent-text: #ffffff;
   --danger: #ef4444;
   --danger-bg: rgba(239, 68, 68, 0.15);
+  --danger-text: #fca5a5;
   --warning: #f59e0b;
   --warning-bg: rgba(245, 158, 11, 0.15);
+  --warning-text: #fcd34d;
+  --success: #22c55e;
+  --success-bg: rgba(34, 197, 94, 0.15);
+  --success-text: #86efac;
 
   font: 16px/1.45 system-ui, 'Segoe UI', Roboto, sans-serif;
   color-scheme: dark;
   color: var(--text);
   background: var(--bg);
   -webkit-font-smoothing: antialiased;
+}
+
+/* Suit la preference systeme quand l'utilisateur n'a pas force un theme explicite. */
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: #f5f6f8;
+    --surface: #ffffff;
+    --surface-alt: #eef0f3;
+    --text: #14161a;
+    --text-dim: #5b6470;
+    --border: #d8dce1;
+    --danger: #dc2626;
+    --danger-bg: rgba(220, 38, 38, 0.1);
+    --danger-text: #b91c1c;
+    --warning: #d97706;
+    --warning-bg: rgba(217, 119, 6, 0.12);
+    --warning-text: #92400e;
+    --success: #16a34a;
+    --success-bg: rgba(22, 163, 74, 0.12);
+    --success-text: #15803d;
+    color-scheme: light;
+  }
+}
+
+/* Choix explicite dans les reglages (data-theme sur <html>) : prioritaire sur la preference systeme. */
+:root[data-theme='dark'] {
+  --bg: #14161a;
+  --surface: #1e2126;
+  --surface-alt: #262a31;
+  --text: #eef0f2;
+  --text-dim: #9aa2ad;
+  --border: #343941;
+  --danger: #ef4444;
+  --danger-bg: rgba(239, 68, 68, 0.15);
+  --danger-text: #fca5a5;
+  --warning: #f59e0b;
+  --warning-bg: rgba(245, 158, 11, 0.15);
+  --warning-text: #fcd34d;
+  --success: #22c55e;
+  --success-bg: rgba(34, 197, 94, 0.15);
+  --success-text: #86efac;
+  color-scheme: dark;
+}
+
+:root[data-theme='light'] {
+  --bg: #f5f6f8;
+  --surface: #ffffff;
+  --surface-alt: #eef0f3;
+  --text: #14161a;
+  --text-dim: #5b6470;
+  --border: #d8dce1;
+  --danger: #dc2626;
+  --danger-bg: rgba(220, 38, 38, 0.1);
+  --danger-text: #b91c1c;
+  --warning: #d97706;
+  --warning-bg: rgba(217, 119, 6, 0.12);
+  --warning-text: #92400e;
+  --success: #16a34a;
+  --success-bg: rgba(22, 163, 74, 0.12);
+  --success-text: #15803d;
+  color-scheme: light;
 }
 
 * {
@@ -57,6 +123,22 @@ h1 {
   flex-shrink: 0;
 }
 
+.app-header-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.auth-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
 .button {
   font: inherit;
   font-weight: 600;
@@ -92,12 +174,17 @@ h1 {
 
 .banner-error {
   background: var(--danger-bg);
-  color: #fca5a5;
+  color: var(--danger-text);
 }
 
 .banner-warning {
   background: var(--warning-bg);
-  color: #fcd34d;
+  color: var(--warning-text);
+}
+
+.banner-success {
+  background: var(--success-bg);
+  color: var(--success-text);
 }
 
 .upload-screen {
@@ -226,6 +313,207 @@ h1 {
   padding: 14px 16px;
 }
 
+.save-ride-controls {
+  display: flex;
+  justify-content: center;
+  padding: 0 16px 12px;
+  flex-shrink: 0;
+}
+
+.dialog-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  z-index: 2000;
+}
+
+.dialog {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+  width: 100%;
+  max-width: 360px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.dialog h2 {
+  font-size: 16px;
+  margin: 0;
+}
+
+.dialog-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-dim);
+  border: none;
+  padding: 0;
+  margin: 0;
+}
+
+.dialog-field input[type='text'] {
+  font: inherit;
+  font-size: 15px;
+  color: var(--text);
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 10px;
+}
+
+.dialog-field legend {
+  padding: 0;
+}
+
+.dialog-field-options {
+  display: flex;
+  gap: 16px;
+  font-size: 14px;
+  color: var(--text);
+}
+
+.dialog-field-options label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dialog-warning {
+  font-size: 13px;
+  color: var(--text-dim);
+  margin: 0;
+  line-height: 1.5;
+}
+
+.dialog-error {
+  color: var(--danger-text);
+  font-size: 13px;
+  margin: 0;
+}
+
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.my-rides-screen {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 16px;
+  gap: 12px;
+  overflow-y: auto;
+}
+
+.my-rides-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.my-rides-header h2 {
+  font-size: 16px;
+  margin: 0;
+}
+
+.my-rides-hint {
+  color: var(--text-dim);
+  font-size: 14px;
+  text-align: center;
+  margin-top: 24px;
+}
+
+.my-rides-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.my-rides-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+
+.my-rides-item-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.my-rides-item-title {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.my-rides-item-meta {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.track-thumbnail {
+  width: 72px;
+  height: 48px;
+  flex-shrink: 0;
+  background: var(--surface-alt);
+  border-radius: 6px;
+}
+
+.track-thumbnail path {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2.5;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.my-rides-item-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.favorite-star {
+  background: none;
+  border: none;
+  font-size: 22px;
+  line-height: 1;
+  color: var(--text-dim);
+  cursor: pointer;
+  padding: 4px;
+}
+
+.favorite-star--active {
+  color: var(--warning);
+}
+
+.favorite-star:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
 .progress-panel {
   flex-shrink: 0;
   padding: 12px 16px;
@@ -235,7 +523,7 @@ h1 {
 
 .off-track-banner {
   background: var(--danger-bg);
-  color: #fca5a5;
+  color: var(--danger-text);
   padding: 8px 12px;
   border-radius: 8px;
   margin-bottom: 10px;
@@ -321,6 +609,12 @@ h1 {
   display: block;
 }
 
+.elevation-chart-path {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2;
+}
+
 .elevation-cursor-line {
   stroke: var(--danger);
   stroke-width: 1.5;
@@ -341,10 +635,82 @@ h1 {
   text-align: center;
 }
 
+.sidebar-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  z-index: 2000;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.sidebar {
+  width: 100%;
+  max-width: 320px;
+  height: 100%;
+  background: var(--surface);
+  border-left: 1px solid var(--border);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  overflow-y: auto;
+}
+
+.sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.sidebar-header h2 {
+  font-size: 16px;
+  margin: 0;
+}
+
+.sidebar-field {
+  border: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sidebar-field legend {
+  font-size: 13px;
+  color: var(--text-dim);
+  padding: 0;
+  margin-bottom: 4px;
+}
+
+.sidebar-field-options {
+  display: flex;
+  gap: 16px;
+}
+
+.sidebar-field-options--column {
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sidebar-field-options label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+}
+
+.sidebar-hint {
+  font-size: 12px;
+  color: var(--text-dim);
+  margin: 0;
+}
+
 .crash-screen pre {
   white-space: pre-wrap;
   word-break: break-word;
-  color: #fca5a5;
+  color: var(--danger-text);
   background: var(--surface-alt);
   padding: 12px;
   border-radius: 8px;
