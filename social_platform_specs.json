@@ -121,6 +121,7 @@
         "displayName": "string",
         "photoURL": "string | null (fourni par le provider auth, pas d'upload utilisateur)",
         "createdAt": "timestamp",
+        "pseudo": "string | null - pseudo public distinct du nom du compte Google, utilise comme ownerDisplayName sur les parcours sauvegardes s'il est renseigne (sinon repli sur displayName, puis 'Pilote')",
         "settings": {
           "unitSystem": "'metric' | 'imperial'",
           "fuelUnit": "'liters' | 'gallons'",
@@ -149,9 +150,9 @@
         "favoritedAt": "timestamp"
       },
       "users/{uid}/fuelLogs/{entryId}": {
-        "date": "timestamp",
-        "volume": "number (dans l'unite au moment de la saisie, convertie a l'affichage)",
-        "distanceSinceLastFillMeters": "number",
+        "date": "timestamp - editable par l'utilisateur a la saisie (pas serverTimestamp), pour logger un plein a posteriori",
+        "volumeLiters": "number - stockage canonique en litres (meme logique que les metres/mps pour distance/vitesse), converti vers fuelUnit a l'affichage. Deviation du champ 'volume' d'origine (unite ambigue) vers un nom explicite.",
+        "distanceSinceLastFillMeters": "number - pre-rempli automatiquement (somme des parcours 'recorded' depuis le dernier plein logue, cf. decisions_log.fuel_distance_recorded_rides_only), ajustable manuellement",
         "isDistanceManuallyAdjusted": "boolean"
       }
     }
@@ -188,7 +189,11 @@
     { "id": "single_vehicle_assumption", "decision": "fuel_log suppose une seule moto par utilisateur, pas de garage multi-vehicules", "source": "defaut propose par Claude, a corriger si desaccord" },
     { "id": "no_firebase_storage", "decision": "Firebase Storage abandonne. Decouvert au moment du deploy des rules : un nouveau projet Firebase exige le plan Blaze (carte bancaire) pour activer Storage, meme sous quota gratuit - incompatible avec la contrainte '100% gratuit, jamais de carte'. La geometrie simplifiee (turf simplify) est stockee directement dans rides/{rideId}.trackPoints (Firestore seul, plan Spark, aucune carte requise). L'export .gpx devient une regeneration a la volee cote client, pas un fichier persiste.", "source": "utilisateur (contrainte cout) + Claude (solution technique)" },
     { "id": "firestore_nested_arrays_unsupported", "decision": "Firestore refuse les tableaux imbriques (un tableau dont un element est lui-meme un tableau) - incompatible avec des coordinates GeoJSON brutes ([[lng,lat],[lng,lat],...]). Decouvert au premier essai de sauvegarde (addDoc echouait, remontait en 'Echec de la sauvegarde' generique cote UI). Toute geometrie de parcours stockee doit etre aplatie en tableau d'objets {lng,lat,ele} (trackPoints), jamais en tableau de paires/triplets bruts. S'applique aussi a route_recording des qu'il ecrira de la geometrie.", "source": "decouverte en test, Claude (diagnostic + correctif)" },
-    { "id": "firestore_composite_index_required", "decision": "Toute query Firestore combinant un filtre d'egalite (where ownerId == uid) ET un orderBy sur un CHAMP DIFFERENT (createdAt) exige un index composite explicite - Firestore ne le cree jamais automatiquement, meme si le filtre d'egalite semble 'evident'. Decouvert sur listMyRides (rides ou ownerId == uid, orderBy createdAt desc) : echec silencieux remonte en 'Impossible de charger tes parcours' generique. Corrige en declarant l'index dans firestore.indexes.json (deploye via firebase deploy --only firestore:indexes) plutot que de compter sur le lien auto-genere dans l'erreur navigateur. S'applique aussi a public_feed_discovery (visibility == 'public', orderBy createdAt desc) qui aura besoin de son propre index composite le moment venu.", "source": "decouverte en test, Claude (diagnostic + correctif)" }
+    { "id": "firestore_composite_index_required", "decision": "Toute query Firestore combinant un filtre d'egalite (where ownerId == uid) ET un orderBy sur un CHAMP DIFFERENT (createdAt) exige un index composite explicite - Firestore ne le cree jamais automatiquement, meme si le filtre d'egalite semble 'evident'. Decouvert sur listMyRides (rides ou ownerId == uid, orderBy createdAt desc) : echec silencieux remonte en 'Impossible de charger tes parcours' generique. Corrige en declarant l'index dans firestore.indexes.json (deploye via firebase deploy --only firestore:indexes) plutot que de compter sur le lien auto-genere dans l'erreur navigateur. S'applique aussi a public_feed_discovery (visibility == 'public', orderBy createdAt desc) qui aura besoin de son propre index composite le moment venu.", "source": "decouverte en test, Claude (diagnostic + correctif)" },
+    { "id": "sidebar_consolidation", "decision": "Le header (Decouverte/Mes parcours/Mes favoris/Parametres/Se deconnecter empiles en boutons) est devenu illisible sur mobile a mesure que les features s'ajoutaient. Tout est regroupe dans un seul AppSidebar (drawer) ouvert par un bouton menu (hamburger) : navigation, compte (nom, pseudo, se deconnecter), et les reglages unite/theme deja existants. Le header ne garde que : connexion (invite), Nouveau parcours, Reinitialiser, et le bouton menu - tous contextuels a l'ecran courant.", "source": "utilisateur (retour UI) + Claude (implementation)" },
+    { "id": "gpx_export_track_only", "decision": "L'export .gpx (bouton Telecharger sur Decouverte/Mes parcours/Mes favoris) genere toujours un <trk> (track), jamais un <rte> (route) - correspond au modele interne de l'app (un parcours suivi/enregistre est un trace, pas une liste de points d'etape) et evite d'exposer un choix qui n'a pas d'usage clair ici. Pas de choix propose a l'utilisateur.", "source": "Claude, a corriger si en desaccord" },
+    { "id": "fuel_volume_canonical_liters", "decision": "Le champ fuelLogs.volume du data model d'origine (unite ambigue, 'au moment de la saisie') est remplace par volumeLiters : stockage canonique toujours en litres, comme les metres/mps pour distance/vitesse partout ailleurs dans l'app. La conversion vers fuelUnit (litres/gallons) n'est qu'un affichage (convertVolumeValue/toLitersFromVolumeValue dans units.ts), evitant qu'un changement ulterieur de fuelUnit ne rende les entrees existantes incoherentes.", "source": "Claude (le data model d'origine etait ambigu sur l'unite de stockage)" },
+    { "id": "fuel_distance_recorded_rides_only", "decision": "Le calcul auto de 'distance depuis le dernier plein' ne somme que les parcours source == 'recorded' (enregistres en live, donc necessairement roules) posterieurs au dernier plein logue - les parcours source == 'uploaded' sont ignores car un GPX peut avoir ete uploade/consulte sans jamais avoir ete suivi en vrai (meme logique que pilot_cockpit_stats). Ajustable manuellement par l'utilisateur si le calcul auto est incomplet (trajets non enregistres dans l'app).", "source": "Claude, a corriger si en desaccord" }
   ],
 
   "backlog_deferred": [
@@ -203,6 +208,10 @@
     {
       "id": "ad_banner",
       "reason": "Techniquement trivial (bandeau bas de page), mais le vrai cout est ailleurs : une regie type AdSense implique des trackers tiers -> bandeau de consentement RGPD obligatoire (l'app n'en a besoin d'aucun aujourd'hui), et entre en tension directe avec le positionnement '100% gratuit et transparent'. A ne considerer que si un vrai volume d'usage le justifie, et plutot via une regie respectueuse de la vie privee (ex: EthicalAds) qui n'a pas besoin de banniere de consentement (pas de cookies/tracking), quitte a accepter un revenu faible."
+    },
+    {
+      "id": "elevation_api_enrichment",
+      "reason": "route_recording capture l'altitude GPS brute (pos.coords.altitude) quand le navigateur/appareil la fournit, mais c'est peu fiable sur Android (souvent null ou tres bruite selon les appareils, contrairement au lat/lng). Une vraie topographie fiable demanderait une API d'elevation externe gratuite (ex: Open-Elevation, OpenTopoData), appelee soit a la fin de l'enregistrement soit au telechargement .gpx via une modale de confirmation ('ajouter la topographie ?'). Repousse explicitement par l'utilisateur ('on verra ca plus tard') - pas d'appel externe ajoute pour l'instant."
     },
     {
       "id": "premium_analytics_paywall",

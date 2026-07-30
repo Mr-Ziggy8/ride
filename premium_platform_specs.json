@@ -1,0 +1,188 @@
+{
+  "project_name": "gpx-live-tracker",
+  "spec_id": "premium_platform_v1",
+  "phase": "3 - monetisation, roles et moderation",
+  "based_on": "social_platform_specs.json (phase 2 : reseau social gratuit, auth/Firestore/favoris/enregistrement live/carnet de plein)",
+  "description": "Introduction d'un palier payant (Paid-User) et de roles de moderation (Moderator/Admin) au-dessus du reseau social gratuit existant : acces aux statistiques et au carnet de plein derriere paywall, moderation des parcours publics, filtres de decouverte (distance/pays/region), compteurs d'engagement, formulaire de feedback, codes promo, et release notes visibles.",
+  "vision": "Le socle gratuit (upload, suivi live, enregistrement, favoris, decouverte) reste 100% gratuit et ne se degrade jamais. Le palier payant ne debloque que de la valeur ajoutee optionnelle (stats, carnet de plein), jamais une fonctionnalite de securite/confidentialite de base. La monetisation doit rester honnete : pas de dark pattern, pas de degradation artificielle du gratuit pour pousser au paiement.",
+  "target_platform": "Inchange (Android Chrome en priorite, multi-device via comptes).",
+
+  "constraint_changes_from_phase_2": {
+    "no_backend": "Definitivement casse pour ce lot, et c'est assume : un vrai paiement (webhook Stripe) et une redemption de code promo doivent etre valides cote serveur (signature secrete, ecriture de role non falsifiable) - aucune Security Rule Firestore seule ne peut le faire. Voir decisions_log.serverless_runtime_choice pour le choix concret (Vercel Functions, pas Firebase Cloud Functions).",
+    "no_firebase_storage": "Inchange, toujours evite.",
+    "roles_are_not_user_writable": "Nouvelle contrainte dure : le type de compte (role) ne doit jamais pouvoir etre modifie par le client lui-meme, contrairement a settings/pseudo qui restent en ecriture libre sur son propre document. Voir decisions_log.roles_separate_collection."
+  },
+
+  "tech_stack_additions": {
+    "payment_provider": "Stripe (Checkout + webhook), pressenti dans le backlog phase 2 (premium_analytics_paywall). A confirmer au moment de l'implementation (compte Stripe, produits/prix).",
+    "serverless_runtime": "Vercel Serverless Functions (repertoire api/), PAS Firebase Cloud Functions - voir decisions_log.serverless_runtime_choice. Utilise firebase-admin (service account, cle stockee en variable d'environnement Vercel, jamais exposee cote client) pour ecrire roles/{uid} et promoCodes/{code} depuis le serveur.",
+    "geography_reference_data": "Jeu de donnees statique bundle (JSON, pas d'API tierce) : pays d'Europe + regions/subdivisions de chacun. Voir decisions_log.region_data_static_bundle.",
+    "state_management": "Nouveau React Context/hook pour le role courant (useUserRole), lu depuis roles/{uid} (lecture seule cote client)."
+  },
+
+  "features": [
+    {
+      "id": "user_roles",
+      "priority": "must_have",
+      "description": "Quatre types de compte : Free-User (defaut), Paid-User, Moderator, Admin. Le role est stocke hors du document users/{uid} (voir data_models.firestore roles/{uid}) et n'est jamais modifiable directement par le client - seulement par une fonction serveur (paiement Stripe reussi, code promo valide, ou attribution manuelle par un Admin via un futur outil interne)."
+    },
+    {
+      "id": "role_based_permissions",
+      "priority": "must_have",
+      "description": "Matrice de droits minimale pour ce lot : Paid-User, Moderator et Admin peuvent tous acceder au menu Statistiques et au Carnet de plein (les deux features payantes de ce lot). Moderator et Admin peuvent en plus renommer/supprimer n'importe quel parcours public. Le detail plus fin (ex: Admin seul peut gerer les roles d'autrui) est repousse a un futur outil d'administration, hors scope ici (voir open_questions)."
+    },
+    {
+      "id": "paywall_stats_menu",
+      "priority": "must_have",
+      "description": "Nouvelle entree de menu 'Statistiques' dans la sidebar, visible pour tous mais dont le contenu est gate : Free-User voit un ecran 'Debloquer les fonctionnalites premium' (voir premium_unlock_landing), Paid-User/Moderator/Admin voient le contenu reel (repris du backlog phase 2 : VMax, inclinaison, comparaisons entre parcours - a specifier plus finement le moment venu, pas detaille dans ce lot)."
+    },
+    {
+      "id": "fuel_log_paywall",
+      "priority": "must_have",
+      "description": "Le Carnet de plein existant (phase 2) passe derriere le meme paywall que les statistiques - meme gating, memes roles autorises. Le libelle devient 'Carnet de pleins' (pluriel). Interprete comme un simple renommage d'ecran existant, PAS l'introduction d'un multi-vehicules/garage (qui contredirait single_vehicle_assumption de la phase 2) - a corriger explicitement si l'intention etait bien un garage multi-vehicules, c'est un changement plus consequent."
+    },
+    {
+      "id": "premium_unlock_landing",
+      "priority": "must_have",
+      "description": "Ecran 'Debloquer les fonctionnalites premium' affiche a un Free-User qui accede a Statistiques ou Carnet de pleins. Pour ce lot : simple page 'Arrive bientot' (pas de flow Stripe complet specifie ici) + champ de saisie de code promo (voir promo_codes)."
+    },
+    {
+      "id": "promo_codes",
+      "priority": "must_have",
+      "description": "Champ 'Code promo' sur l'ecran premium_unlock_landing. La redemption (verifier le code, le marquer utilise, ecrire le role Paid-User) se fait entierement cote serveur (fonction Vercel + firebase-admin) - jamais le client qui valide son propre code et s'auto-attribue un role. Objectif annonce : offrir Paid-User aux 100 premiers utilisateurs testeurs via un ou plusieurs codes dedies."
+    },
+    {
+      "id": "moderation_public_rides",
+      "priority": "must_have",
+      "description": "Un Moderator ou Admin peut renommer ou supprimer n'importe quel parcours visibility=='public' (pas les parcours prives des autres) depuis la vue Decouverte, en plus du proprietaire. La suppression par un moderateur suit la meme confirmation a friction elevee que ride_deletion_with_confirmation (phase 2), sans exception."
+    },
+    {
+      "id": "ride_engagement_counters",
+      "priority": "must_have",
+      "description": "Compteurs downloadCount / followCount sur chaque parcours, incrementes a chaque telechargement .gpx ou 'Suivre' depuis Decouverte. 'Par user id' interprete comme : compter les UTILISATEURS DISTINCTS ayant telecharge/suivi (pas un journal complet d'evenements) - voir data_models pour la structure retenue (compteur agrege + sous-collection de presence)."
+    },
+    {
+      "id": "ride_name_suggestion",
+      "priority": "should_have",
+      "description": "A l'enregistrement (upload ou live), suggere un titre par defaut 'Ville de depart vers Ville d'arrivee' dans SaveRideDialog, base sur une geolocalisation inverse du premier et du dernier point du trace (en plus du centre deja utilise pour regionLabel). L'utilisateur reste libre de modifier le titre suggere avant de sauvegarder."
+    },
+    {
+      "id": "ride_country_region_manual",
+      "priority": "should_have",
+      "description": "Dans la modale de sauvegarde, champs optionnels Pays (defaut : Belgique) et Region (les regions belges si Pays==Belgique). Si le trace traverse plusieurs regions, la region du POINT DE DEPART est utilisee par defaut. Champs manuels, distincts du regionLabel automatique (Nominatim) deja existant qui reste purement informatif/affichage - country/region sont structures et servent au filtrage (voir discovery_filtering)."
+    },
+    {
+      "id": "eu_countries_regions_dataset",
+      "priority": "should_have",
+      "description": "Extension du selecteur Pays a TOUS les pays d'Europe, avec un selecteur Region dont les options se mettent a jour automatiquement selon le pays choisi (ex: France selectionne -> regions francaises). Jeu de donnees statique bundle avec l'app (voir tech_stack_additions.geography_reference_data), pas d'API tierce."
+    },
+    {
+      "id": "discovery_filtering",
+      "priority": "should_have",
+      "description": "Filtres sur Decouverte, Mes parcours et Favoris : distance (slider min/max en km, converti selon unitSystem), pays (selection multiple), region (selection multiple, options agregees de tous les pays selectionnes). Filtrage cote CLIENT sur les resultats deja charges/pagines (voir decisions_log.filtering_client_side), pas par des query Firestore composees."
+    },
+    {
+      "id": "release_notes",
+      "priority": "could_have",
+      "description": "Section en bas de l'AppSidebar affichant la date de la derniere release et un resume court des changements recents, pour montrer que l'app est activement maintenue. Alimente par un fichier statique (ex: CHANGELOG.json) mis a jour a chaque deploiement."
+    },
+    {
+      "id": "feedback_form",
+      "priority": "should_have",
+      "description": "Formulaire accessible depuis la sidebar permettant a un utilisateur connecte d'envoyer un retour libre (texte). Stocke dans Firestore (feedback/{id}), lisible uniquement par Moderator/Admin."
+    }
+  ],
+
+  "data_models": {
+    "firestore": {
+      "roles/{uid}": {
+        "type": "'free' | 'paid' | 'moderator' | 'admin' - absence de document == 'free' implicite",
+        "grantedAt": "timestamp",
+        "grantedVia": "'stripe' | 'promo_code' | 'admin_manual'",
+        "_note": "Pas de champ email : Firebase Auth associe deja uid <-> email, dupliquer l'email ici serait de la PII redondante a maintenir sans benefice. uid est deja la cle stable."
+      },
+      "promoCodes/{code}": {
+        "grantsRoleType": "'paid'",
+        "redeemedByUid": "string | null",
+        "redeemedAt": "timestamp | null",
+        "_note": "Jamais accede directement par le client (ni lu ni ecrit) - uniquement par la fonction serveur de redemption via firebase-admin, qui contourne les Security Rules."
+      },
+      "feedback/{entryId}": {
+        "uid": "string",
+        "message": "string",
+        "createdAt": "timestamp"
+      },
+      "rides/{rideId}_additions": {
+        "country": "string | null - saisi manuellement a la sauvegarde, defaut 'Belgique'",
+        "region": "string | null - saisi manuellement, region du point de depart si le trace traverse plusieurs regions",
+        "downloadCount": "number - defaut 0, incremente de 1 a chaque telechargement .gpx",
+        "followCount": "number - defaut 0, incremente de 1 a chaque 'Suivre' depuis Decouverte"
+      },
+      "rides/{rideId}/downloadedBy/{uid}": {
+        "_note": "Document de presence (existence == cet utilisateur a deja telecharge ce parcours au moins une fois), pas un journal d'evenements horodates. Permet de compter les utilisateurs distincts sans stocker un historique complet. Meme pattern pour rides/{rideId}/followedBy/{uid}."
+      }
+    },
+    "static_bundled": {
+      "euCountriesRegions.json": "Tableau { country: string, regions: string[] }[] pour tous les pays d'Europe, importe directement dans le bundle (pas de requete reseau)."
+    }
+  },
+
+  "security_rules_requirements": [
+    "roles/{uid} : lecture uniquement par le proprietaire (request.auth.uid == uid) - un utilisateur voit son propre role pour adapter son UI. AUCUNE ecriture cote client, jamais (ni meme le proprietaire) - seule la fonction serveur (firebase-admin, qui contourne les Security Rules) peut ecrire ce document.",
+    "promoCodes/{code} : aucun acces client (ni lecture ni ecriture) - entierement gere par la fonction serveur de redemption.",
+    "feedback/{entryId} : creation si request.auth != null && request.resource.data.uid == request.auth.uid ; lecture seulement si le role du requester (lu via roles/{request.auth.uid}) est 'moderator' ou 'admin'.",
+    "rides/{rideId} update/delete : etendu de 'owner uniquement' a 'owner OU role moderator/admin' - necessite une fonction Firestore Rules qui lit roles/{request.auth.uid} (get() supplementaire, cout de lecture a garder en tete pour le quota).",
+    "rides/{rideId} : nouvelle regle d'update limitee aux seuls champs downloadCount/followCount, ouverte a tout utilisateur authentifie (pas seulement le owner) puisque n'importe qui peut telecharger/suivre un parcours public - via affectedKeys().hasOnly(['downloadCount','followCount']) et idealement une verification d'increment de +1 exact.",
+    "rides/{rideId}/downloadedBy/{uid} et /followedBy/{uid} : creation par l'utilisateur authentifie pour son propre uid uniquement, pas de lecture necessaire cote client (juste tester l'existence via le serveur/compteur agrege)."
+  ],
+
+  "decisions_log": [
+    { "id": "serverless_runtime_choice", "decision": "Vercel Serverless Functions, PAS Firebase Cloud Functions. Meme piege que Storage (decisions_log.no_firebase_storage en phase 2) : deployer ne serait-ce qu'une seule Cloud Function exige le plan Blaze (carte bancaire) sur le projet Firebase, meme si l'usage reste sous le quota gratuit - incompatible avec la contrainte '100% gratuit, jamais de carte' pour l'app elle-meme. Vercel (deja utilise pour l'hebergement statique) inclut des Serverless Functions sur son plan Hobby sans carte requise. Ces fonctions utilisent firebase-admin avec une cle de service Firebase (variable d'environnement Vercel) pour ecrire dans Firestore en contournant les Security Rules.", "source": "Claude (meme raisonnement que no_firebase_storage, applique au paiement/promo)" },
+    { "id": "roles_separate_collection", "decision": "Le role vit dans roles/{uid}, jamais comme un champ de users/{uid}. Raison : users/{uid} a une regle 'allow write: if uid==auth.uid' (necessaire pour que l'utilisateur gere settings/pseudo librement) - si le role etait un champ du meme document, un utilisateur pourrait s'auto-attribuer Admin depuis la console JS du navigateur. roles/{uid} est en lecture seule pour le proprietaire et en ecriture EXCLUSIVEMENT via la fonction serveur (firebase-admin).", "source": "Claude, decouvert en review du plan (risque de securite reel, pas theorique)" },
+    { "id": "promo_code_redemption_server_side", "decision": "La redemption d'un code promo (verification + marquage 'utilise' + attribution du role) se fait integralement dans une fonction Vercel, jamais cote client. Le client envoie juste le code saisi a l'endpoint et affiche le resultat.", "source": "Claude, meme raisonnement que roles_separate_collection" },
+    { "id": "filtering_client_side", "decision": "Les filtres distance/pays/region (discovery_filtering) s'appliquent en memoire sur les resultats deja recuperes/pagines, pas via des combinaisons de where()/orderBy() Firestore. Raison : chaque nouvelle combinaison de filtres composerait potentiellement un nouvel index composite requis (deja rencontre 2 fois en phase 2 pour de simples cas a un seul filtre), et Firestore n'autorise qu'un seul filtre d'inegalite (le slider km) par requete de toute facon - une combinaison km+pays+region n'est pas exprimable proprement en une seule query.", "source": "Claude, base sur l'experience directe de firestore_composite_index_required (phase 2)" },
+    { "id": "engagement_counters_aggregate_plus_presence", "decision": "'Compter par user id' interprete comme utilisateurs DISTINCTS, pas un journal d'evenements. Un compteur agrege (downloadCount/followCount) plus une sous-collection de presence (downloadedBy/{uid}, juste l'existence du doc) suffisent a repondre au besoin sans construire un historique complet couteux en lectures/ecritures.", "source": "Claude, a corriger si un vrai historique horodate est voulu" },
+    { "id": "ride_naming_extra_geocoding_calls", "decision": "La suggestion 'Ville A vers Ville B' ajoute 2 appels Nominatim par sauvegarde (point de depart + point d'arrivee), en plus de l'appel deja fait sur le centre pour regionLabel (donc 3 appels au total par sauvegarde). Reste un usage ponctuel a la sauvegarde (pas de boucle/bulk), donc toujours dans l'esprit 'usage leger' de la politique Nominatim, mais a garder en tete si le volume de sauvegardes grossit.", "source": "Claude, a surveiller si usage massif" },
+    { "id": "region_data_static_bundle", "decision": "Le referentiel pays/regions d'Europe est un fichier JSON statique bundle avec l'app, pas un appel a une API externe - c'est une donnee de reference qui change tres rarement, aucune raison d'ajouter une dependance reseau/latence pour ca.", "source": "Claude, a corriger si en desaccord" },
+    { "id": "country_region_manual_vs_auto_coexist", "decision": "Le champ regionLabel automatique (Nominatim, phase 2, affichage libre) et les nouveaux champs country/region (manuels, structures, phase 3) coexistent et servent des besoins differents : regionLabel reste purement informatif sur les cartes de parcours, country/region servent exclusivement au filtrage. Pas de fusion des deux.", "source": "Claude, a corriger si l'intention etait de remplacer regionLabel" },
+    { "id": "fuel_log_plural_rename_only", "decision": "'Carnet de pleinS' interprete comme un renommage du libelle existant ('Carnet de plein' -> 'Carnet de pleins'), pas l'introduction d'un multi-vehicules/garage - ce qui contredirait single_vehicle_assumption (phase 2) et serait un chantier bien plus consequent (vehicules, association des parcours a un vehicule, etc.). A confirmer explicitement si un vrai multi-vehicules etait souhaite.", "source": "Claude, interpretation a corriger si en desaccord" }
+  ],
+
+  "backlog_deferred": [
+    {
+      "id": "admin_role_management_ui",
+      "reason": "Attribuer/revoquer des roles (au-dela de Stripe/code promo) necessite un outil d'administration dedie (lister les users, changer leur role). Hors scope de ce lot - pour ce lot, l'attribution manuelle par un Admin peut se faire directement dans la console Firebase (ecriture manuelle du doc roles/{uid}) en attendant un vrai outil."
+    },
+    {
+      "id": "stripe_pricing_plans",
+      "reason": "Le prix/la structure d'abonnement (mensuel? unique? plusieurs paliers?) n'est pas definie dans ce lot - a decider avant l'implementation du flow Stripe Checkout."
+    },
+    {
+      "id": "fine_grained_admin_vs_moderator",
+      "reason": "Ce lot traite Moderator et Admin de facon identique (memes droits : stats/carnet de plein/moderation des parcours publics). Une distinction plus fine (ex: seul Admin gere les roles) est repoussee a admin_role_management_ui."
+    }
+  ],
+
+  "scaling_and_free_tier_risks": {
+    "vercel_serverless_functions_hobby_plan": "Le plan Hobby de Vercel inclut des Serverless Functions gratuitement avec des limites d'execution generreuses pour un volume faible (webhook Stripe + redemption de code promo restent des appels peu frequents) - a surveiller seulement si l'usage devient reellement significatif.",
+    "stripe_fees": "Une fois de vrais paiements actifs, Stripe preleve des frais de transaction (pas un enjeu de quota gratuit, mais un cout reel a accepter des le premier paiement traite).",
+    "moderation_read_cost": "Chaque verification de droit moderateur (get() sur roles/{uid} dans les Security Rules) consomme une lecture Firestore supplementaire a chaque tentative de modification/suppression d'un parcours - volume faible attendu (pas une action frequente), donc pas un risque reel de quota."
+  },
+
+  "open_questions": [
+    "Le contenu exact de l'ecran Statistiques (au-dela de VMax/inclinaison deja evoques en phase 2) reste a specifier.",
+    "single_vehicle_assumption est-elle toujours valide, ou 'Carnet de pleinS' signale-t-il un besoin de multi-vehicules ?",
+    "Structure de prix Stripe (voir backlog_deferred.stripe_pricing_plans)."
+  ],
+
+  "acceptance_criteria": [
+    "Un Free-User qui ouvre Statistiques ou Carnet de pleins voit l'ecran de deblocage premium, pas le contenu reel",
+    "Un Paid-User, Moderator ou Admin accede au contenu reel de Statistiques et Carnet de pleins",
+    "Aucun utilisateur ne peut modifier son propre role depuis le client (ni via l'UI, ni via un appel direct au SDK Firestore)",
+    "Un code promo valide, saisi une seule fois, attribue Paid-User de facon verifiee cote serveur - un meme code ne peut pas etre redeeme deux fois",
+    "Un Moderator ou Admin peut supprimer ou renommer un parcours public qui n'est pas le sien ; un Free-User ou Paid-User ne le peut pas",
+    "Le telechargement .gpx et le clic 'Suivre' incrementent les compteurs correspondants une seule fois par utilisateur distinct",
+    "Les filtres distance/pays/region sur Decouverte/Mes parcours/Favoris s'appliquent sans requete Firestore additionnelle par combinaison de filtres",
+    "Selectionner un pays dans le formulaire de sauvegarde met a jour la liste des regions proposees pour ce pays"
+  ]
+}

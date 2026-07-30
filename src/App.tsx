@@ -1,27 +1,41 @@
 import { useEffect, useMemo, useState } from 'react';
-import { AuthButton } from './components/AuthButton';
+import { AppSidebar, type SidebarDestination } from './components/AppSidebar';
 import { DiscoveryView } from './components/DiscoveryView';
 import { FavoritesView } from './components/FavoritesView';
+import { FuelLogView } from './components/FuelLogView';
 import { GpxUploader } from './components/GpxUploader';
 import { MapView } from './components/MapView';
 import { MyRidesView } from './components/MyRidesView';
 import { ProgressPanel } from './components/ProgressPanel';
 import { ElevationChart } from './components/ElevationChart';
+import { RecordingScreen } from './components/RecordingScreen';
 import { SaveRideDialog } from './components/SaveRideDialog';
-import { SettingsSidebar } from './components/SettingsSidebar';
 import { useAuth } from './hooks/useAuth';
 import { useGeolocation } from './hooks/useGeolocation';
+import { useProfile } from './hooks/useProfile';
+import { useRouteRecording } from './hooks/useRouteRecording';
 import { useSettings } from './hooks/useSettings';
 import { useWakeLock } from './hooks/useWakeLock';
 import { computePaceEstimate, projectPosition } from './utils/trackMath';
 import { clearStoredTrack, loadStoredTrack, storeTrack } from './utils/trackStorage';
-import { saveRide, toTrackData } from './utils/rideStorage';
+import { saveRecordedRide, saveRide, toTrackData } from './utils/rideStorage';
 import type { GpxParseResult } from './utils/gpxParser';
 import type { Ride, RideVisibility, TrackData } from './types';
 
 const DEFAULT_OFF_TRACK_THRESHOLD_METERS = 50;
 
-type ViewMode = 'main' | 'my-rides' | 'discovery' | 'favorites' | 'settings';
+type ViewMode = 'main' | 'my-rides' | 'discovery' | 'favorites' | 'fuel-log';
+
+const VALID_VIEWS: ViewMode[] = ['main', 'my-rides', 'discovery', 'favorites', 'fuel-log'];
+
+function isValidView(value: unknown): value is ViewMode {
+  return typeof value === 'string' && (VALID_VIEWS as string[]).includes(value);
+}
+
+interface HistoryState {
+  view: ViewMode;
+  menuOpen: boolean;
+}
 
 const storedOnLoad = loadStoredTrack();
 
@@ -35,28 +49,68 @@ function App() {
   const [isSaveDialogOpen, setIsSaveDialogOpen] = useState(false);
   const [saveSuccessMessage, setSaveSuccessMessage] = useState<string | null>(null);
   const [view, setView] = useState<ViewMode>('main');
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   const auth = useAuth();
   const { settings, updateSettings } = useSettings(auth.user);
+  const profile = useProfile(auth.user);
   const geo = useGeolocation();
   const wakeLock = useWakeLock();
+  const recording = useRouteRecording();
+  const isRecordingActive = recording.status !== 'idle';
 
-  /**
-   * Pousse une entrée d'historique en entrant dans une vue secondaire, pour que le
-   * bouton retour Android/Chrome (pas seulement le bouton "Retour" interne) en sorte.
-   */
-  const openView = (mode: ViewMode) => {
-    window.history.pushState({ view: mode }, '');
-    setView(mode);
-  };
+  // Maintient watchPosition + wake lock actifs tant que le statut est 'recording' :
+  // couvre a la fois le demarrage explicite (Nouveau parcours) et la reprise apres
+  // un reload d'onglet (le buffer de points survit en localStorage, mais
+  // watchPosition/wakeLock doivent eux redemarrer explicitement). geo.start/
+  // wakeLock.request sont stables (useCallback a deps figes) : le lint react-hooks
+  // reclame les objets geo/wakeLock entiers, mais les ajouter re-declencherait
+  // l'effet (et re-couperait/rouvrirait le watch GPS) a chaque nouvelle position.
+  useEffect(() => {
+    if (recording.status === 'recording') {
+      geo.start();
+      void wakeLock.request();
+    }
+  }, [geo.start, wakeLock.request, recording.status]);
 
+  /** history.back() : le bouton retour Android/Chrome (pas seulement le bouton
+   * "Retour" interne) fonctionne aussi, puisque chaque vue/menu est une vraie
+   * entree d'historique (voir openMenu/navigateFromMenu). */
   const closeView = () => {
     window.history.back();
   };
 
+  /** Le menu est un calque independant de la vue (accessible depuis n'importe
+   * quelle page), pas une vue a part entiere - sinon le contenu affiche derriere
+   * le calque change (retombe sur l'ecran principal) au lieu de rester celui d'ou
+   * on vient. */
+  const openMenu = () => {
+    window.history.pushState({ view, menuOpen: true } satisfies HistoryState, '');
+    setIsMenuOpen(true);
+  };
+
+  const closeMenu = () => {
+    window.history.back();
+  };
+
+  /** Depuis le menu, remplace l'entree d'historique plutot que d'empiler : le
+   * retour depuis la destination va directement a la page d'ou le menu a ete
+   * ouvert, pas au menu lui-meme. */
+  const navigateFromMenu = (destination: SidebarDestination) => {
+    window.history.replaceState({ view: destination, menuOpen: false } satisfies HistoryState, '');
+    setView(destination);
+    setIsMenuOpen(false);
+  };
+
   useEffect(() => {
     const handlePopState = (event: PopStateEvent) => {
-      setView((event.state?.view as ViewMode | undefined) ?? 'main');
+      // event.state peut venir d'une entree d'historique posee par une version
+      // precedente de l'app (schema different, valeur de view disparue) - jamais
+      // fait confiance aveuglement, sous peine d'ecran vide si la valeur ne
+      // correspond plus a aucune vue connue.
+      const state = event.state as Partial<HistoryState> | undefined;
+      setView(isValidView(state?.view) ? state.view : 'main');
+      setIsMenuOpen(state?.menuOpen ?? false);
     };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
@@ -66,7 +120,7 @@ function App() {
   // qu'on est sur une vue qui nécessite un compte, on ne doit jamais rester bloqué
   // sur un écran vide.
   useEffect(() => {
-    if (!auth.user && (view === 'my-rides' || view === 'favorites')) {
+    if (!auth.user && (view === 'my-rides' || view === 'favorites' || view === 'fuel-log')) {
       setView('main');
     }
   }, [auth.user, view]);
@@ -77,6 +131,14 @@ function App() {
   }, [track, geo.position]);
 
   const isOffTrack = projected !== null && projected.perpendicularOffsetMeters > offTrackThresholdMeters;
+
+  // recording.addPosition est stable (useCallback a deps figes) : meme limitation
+  // du lint react-hooks que ci-dessus, le reste des deps est correct et suffisant.
+  useEffect(() => {
+    if (recording.status === 'recording' && geo.position) {
+      recording.addPosition(geo.position);
+    }
+  }, [geo.position, recording.status, recording.addPosition]);
 
   const paceEstimate = useMemo(() => {
     if (!track || !projected || geo.sessionStartMs === null || !geo.position) return null;
@@ -118,9 +180,37 @@ function App() {
 
   const handleSaveRide = async (title: string, visibility: RideVisibility) => {
     if (!auth.user || !track) return;
-    await saveRide(auth.user, track, title, visibility);
+    await saveRide(auth.user, track, title, visibility, profile.pseudo);
     setIsSaveDialogOpen(false);
     setSaveSuccessMessage('Parcours sauvegardé.');
+  };
+
+  const handleStartRecording = () => {
+    geo.reset();
+    setTrack(null);
+    setWarning(null);
+    setUploadError(null);
+    setSaveSuccessMessage(null);
+    clearStoredTrack();
+    recording.start();
+  };
+
+  const handleFinishRecording = () => {
+    geo.stop();
+    void wakeLock.release();
+    recording.finish();
+  };
+
+  const handleSaveRecordedRide = async (title: string, visibility: RideVisibility) => {
+    if (!auth.user) return;
+    const storedPoints = recording.points.map(({ lng, lat, ele }) => ({ lng, lat, ele }));
+    await saveRecordedRide(auth.user, storedPoints, recording.stats, title, visibility, profile.pseudo);
+    recording.discard();
+    setSaveSuccessMessage('Parcours enregistré et sauvegardé.');
+  };
+
+  const handleDiscardRecording = () => {
+    recording.discard();
   };
 
   const handleSignOut = () => {
@@ -143,35 +233,24 @@ function App() {
       <header className="app-header">
         <h1>GPX Live Tracker</h1>
         <div className="app-header-actions">
-          <AuthButton
-            user={auth.user}
-            isLoading={auth.isLoading}
-            onSignIn={auth.signInWithGoogle}
-            onSignOut={handleSignOut}
-          />
-          {view === 'main' && (
-            <button type="button" className="button button-ghost" onClick={() => openView('discovery')}>
-              Découverte
+          {!auth.user && !auth.isLoading && (
+            <button type="button" className="button button-ghost" onClick={auth.signInWithGoogle}>
+              Se connecter avec Google
             </button>
           )}
-          {view === 'main' && auth.user && (
-            <button type="button" className="button button-ghost" onClick={() => openView('my-rides')}>
-              Mes parcours
+          {view === 'main' && !isRecordingActive && auth.user && (
+            <button type="button" className="button button-primary" onClick={handleStartRecording}>
+              Nouveau parcours
             </button>
           )}
-          {view === 'main' && auth.user && (
-            <button type="button" className="button button-ghost" onClick={() => openView('favorites')}>
-              Mes favoris
-            </button>
-          )}
-          {view === 'main' && (
-            <button type="button" className="button button-ghost" onClick={() => openView('settings')}>
-              Paramètres
-            </button>
-          )}
-          {view === 'main' && track && (
+          {view === 'main' && !isRecordingActive && track && (
             <button type="button" className="button button-ghost" onClick={handleReset}>
               Réinitialiser
+            </button>
+          )}
+          {!isMenuOpen && !isRecordingActive && (
+            <button type="button" className="button button-ghost" onClick={openMenu} aria-label="Menu">
+              ☰
             </button>
           )}
         </div>
@@ -191,8 +270,19 @@ function App() {
 
       {saveSuccessMessage && <div className="banner banner-success">{saveSuccessMessage}</div>}
 
-      {view === 'settings' && (
-        <SettingsSidebar settings={settings} onUpdate={updateSettings} onClose={closeView} />
+      {isMenuOpen && (
+        <AppSidebar
+          user={auth.user}
+          isLoading={auth.isLoading}
+          pseudo={profile.pseudo}
+          settings={settings}
+          onSignIn={auth.signInWithGoogle}
+          onSignOut={handleSignOut}
+          onUpdatePseudo={profile.updatePseudo}
+          onUpdateSettings={updateSettings}
+          onNavigate={navigateFromMenu}
+          onClose={closeMenu}
+        />
       )}
 
       {view === 'discovery' && (
@@ -222,14 +312,34 @@ function App() {
         />
       )}
 
-      {(view === 'main' || view === 'settings') && !track && (
+      {view === 'fuel-log' && auth.user && (
+        <FuelLogView
+          user={auth.user}
+          unitSystem={settings.unitSystem}
+          fuelUnit={settings.fuelUnit}
+          onClose={closeView}
+        />
+      )}
+
+      {view === 'main' && isRecordingActive && (
+        <RecordingScreen
+          points={recording.points}
+          livePosition={geo.position}
+          stats={recording.stats}
+          currentSpeedMetersPerSecond={recording.currentSpeedMetersPerSecond}
+          unitSystem={settings.unitSystem}
+          onFinish={handleFinishRecording}
+        />
+      )}
+
+      {view === 'main' && !track && !isRecordingActive && (
         <main className="upload-screen">
           <p>Chargez un fichier GPX pour afficher son tracé et suivre votre position en direct.</p>
           <GpxUploader onParsed={handleParsed} onError={setUploadError} />
         </main>
       )}
 
-      {(view === 'main' || view === 'settings') && track && (
+      {view === 'main' && track && (
         <main className="tracker-screen">
           {warning && <div className="banner banner-warning">{warning}</div>}
           {geo.error && <div className="banner banner-error">{geo.error.message}</div>}
@@ -281,6 +391,14 @@ function App() {
           defaultTitle={`Parcours du ${new Date().toLocaleDateString('fr-FR')}`}
           onSave={handleSaveRide}
           onCancel={() => setIsSaveDialogOpen(false)}
+        />
+      )}
+
+      {recording.status === 'finished_pending_save' && auth.user && (
+        <SaveRideDialog
+          defaultTitle={`Parcours du ${new Date().toLocaleDateString('fr-FR')}`}
+          onSave={handleSaveRecordedRide}
+          onCancel={handleDiscardRecording}
         />
       )}
     </div>

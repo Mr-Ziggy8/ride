@@ -91,6 +91,7 @@ export function useGeolocation(): UseGeolocationResult {
           timestampMs: pos.timestamp,
           heading: pos.coords.heading,
           speedMetersPerSecond: pos.coords.speed,
+          altitudeMeters: pos.coords.altitude,
         });
         setError(null);
       },

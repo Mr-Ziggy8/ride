@@ -8,6 +8,7 @@ import {
   orderBy,
   query,
   serverTimestamp,
+  Timestamp,
   where,
   type DocumentData,
   type QueryDocumentSnapshot,
@@ -15,8 +16,8 @@ import {
 import { db } from '../lib/firebase';
 import { reverseGeocodeRegion } from './geocoding';
 import { buildElevationProfile, hasElevationData } from './gpxParser';
-import { simplifyForDisplay } from './trackMath';
-import type { Ride, RideVisibility, StoredTrackPoint, TrackData } from '../types';
+import { computeBounds, simplifyForDisplay } from './trackMath';
+import type { Ride, RideVisibility, RecordingStats, StoredTrackPoint, TrackData } from '../types';
 
 /**
  * Firestore n'accepte pas les tableaux imbriques - les coordinates GeoJSON
@@ -30,6 +31,12 @@ function toStoredTrackPoints(line: GeoJSON.Feature<GeoJSON.LineString>): StoredT
   }));
 }
 
+/** Pseudo public choisi par l'utilisateur (users/{uid}.pseudo), sinon le nom du
+ * compte Google, sinon un defaut generique - jamais de champ vide en public. */
+function resolveOwnerDisplayName(user: User, pseudo: string | null): string {
+  return pseudo?.trim() || user.displayName || 'Pilote';
+}
+
 /**
  * Stats fields (distance couverte, vitesse max/moyenne, denivele, startedAt/endedAt)
  * ne sont pas encore ecrits ici : ils n'ont de valeur honnete que pour une session
@@ -40,6 +47,7 @@ export async function saveRide(
   track: TrackData,
   title: string,
   visibility: RideVisibility,
+  pseudo: string | null,
 ): Promise<string> {
   const centerLng = (track.bounds[0] + track.bounds[2]) / 2;
   const centerLat = (track.bounds[1] + track.bounds[3]) / 2;
@@ -47,7 +55,7 @@ export async function saveRide(
 
   const docRef = await addDoc(collection(db, 'rides'), {
     ownerId: user.uid,
-    ownerDisplayName: user.displayName ?? 'Pilote',
+    ownerDisplayName: resolveOwnerDisplayName(user, pseudo),
     title,
     source: 'uploaded',
     visibility,
@@ -55,6 +63,50 @@ export async function saveRide(
     totalTrackDistanceMeters: track.totalDistanceMeters,
     trackPoints: toStoredTrackPoints(simplifyForDisplay(track.geojson)),
     bounds: track.bounds,
+    regionLabel,
+  });
+  return docRef.id;
+}
+
+/** Sauvegarde d'un parcours enregistre en live (cf. state_machines.route_recording,
+ * transition finished_pending_save -[Enregistrer]-> idle). Ecriture Firestore unique,
+ * en fin d'enregistrement seulement (offline_safe_recording). */
+export async function saveRecordedRide(
+  user: User,
+  points: StoredTrackPoint[],
+  stats: RecordingStats,
+  title: string,
+  visibility: RideVisibility,
+  pseudo: string | null,
+): Promise<string> {
+  const bounds = computeBounds(points.map((p) => [p.lng, p.lat]));
+  const centerLng = (bounds[0] + bounds[2]) / 2;
+  const centerLat = (bounds[1] + bounds[3]) / 2;
+  const regionLabel = await reverseGeocodeRegion(centerLat, centerLng);
+
+  const coordinates: GeoJSON.Position[] = points.map((p) => (p.ele !== null ? [p.lng, p.lat, p.ele] : [p.lng, p.lat]));
+  const line: GeoJSON.Feature<GeoJSON.LineString> = {
+    type: 'Feature',
+    properties: {},
+    geometry: { type: 'LineString', coordinates },
+  };
+
+  const docRef = await addDoc(collection(db, 'rides'), {
+    ownerId: user.uid,
+    ownerDisplayName: resolveOwnerDisplayName(user, pseudo),
+    title,
+    source: 'recorded',
+    visibility,
+    createdAt: serverTimestamp(),
+    startedAt: Timestamp.fromMillis(stats.startedAtMs),
+    endedAt: Timestamp.fromMillis(stats.endedAtMs ?? stats.startedAtMs),
+    distanceCoveredMeters: stats.distanceCoveredMeters,
+    totalTrackDistanceMeters: stats.distanceCoveredMeters,
+    elevationGainMeters: stats.elevationGainMeters,
+    maxSpeedMetersPerSecond: stats.maxSpeedMetersPerSecond,
+    avgSpeedMetersPerSecond: stats.avgSpeedMetersPerSecond,
+    trackPoints: toStoredTrackPoints(simplifyForDisplay(line)),
+    bounds,
     regionLabel,
   });
   return docRef.id;

@@ -2,6 +2,7 @@ import type { User } from 'firebase/auth';
 import { useFavoriteToggle } from '../hooks/useFavoriteToggle';
 import { usePublicRides } from '../hooks/usePublicRides';
 import { formatDistance } from '../utils/units';
+import { DownloadGpxButton } from './DownloadGpxButton';
 import { FavoriteStarButton } from './FavoriteStarButton';
 import { RideListScreen } from './RideListScreen';
 import type { Ride, UnitSystem } from '../types';
@@ -47,6 +48,7 @@ export function DiscoveryView({ user, unitSystem, onLoadRide, onClose }: Discove
           <button type="button" className="button button-ghost" onClick={() => onLoadRide(ride)}>
             Suivre
           </button>
+          <DownloadGpxButton ride={ride} />
         </>
       )}
     />

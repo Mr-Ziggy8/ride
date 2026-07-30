@@ -3,6 +3,7 @@ import type { User } from 'firebase/auth';
 import { useFavoriteRides } from '../hooks/useFavoriteRides';
 import { removeFavorite } from '../utils/favoriteStorage';
 import { formatDistance } from '../utils/units';
+import { DownloadGpxButton } from './DownloadGpxButton';
 import { FavoriteStarButton } from './FavoriteStarButton';
 import { RideListScreen } from './RideListScreen';
 import type { Ride, UnitSystem } from '../types';
@@ -57,6 +58,7 @@ export function FavoritesView({ user, unitSystem, onLoadRide, onClose }: Favorit
           <button type="button" className="button button-ghost" onClick={() => onLoadRide(ride)}>
             Suivre
           </button>
+          <DownloadGpxButton ride={ride} />
         </>
       )}
     />

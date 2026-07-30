@@ -1,5 +1,5 @@
 import type { ChangeEvent } from 'react';
-import { convertDistanceValue, distanceUnitLabel, formatSpeed } from '../utils/units';
+import { convertDistanceValue, distanceUnitLabel, formatDuration, formatSpeed } from '../utils/units';
 import type { PaceEstimate, ProjectedPosition, TrackData, UnitSystem } from '../types';
 
 export interface ProgressPanelProps {
@@ -11,13 +11,6 @@ export interface ProgressPanelProps {
   speedMetersPerSecond: number | null;
   paceEstimate: PaceEstimate | null;
   unitSystem: UnitSystem;
-}
-
-function formatDuration(totalSeconds: number): string {
-  const totalMinutes = Math.round(totalSeconds / 60);
-  const hours = Math.floor(totalMinutes / 60);
-  const minutes = totalMinutes % 60;
-  return hours > 0 ? `${hours} h ${minutes.toString().padStart(2, '0')}` : `${minutes} min`;
 }
 
 export function ProgressPanel({

@@ -19,6 +19,7 @@ export interface LivePosition {
   /** Degrees clockwise from true north, or null when the device is stationary/unknown. */
   heading: number | null;
   speedMetersPerSecond: number | null;
+  altitudeMeters: number | null;
 }
 
 export interface ProjectedPosition {
@@ -72,6 +73,27 @@ export interface Ride {
   bounds: [number, number, number, number];
   /** null si la geolocalisation inverse a echoue/timeout au moment de la sauvegarde. */
   regionLabel: string | null;
+}
+
+/** Point bufferise localement pendant un enregistrement, avant aplatissement en StoredTrackPoint a la sauvegarde. */
+export interface RecordedTrackPoint {
+  lng: number;
+  lat: number;
+  ele: number | null;
+  timestampMs: number;
+}
+
+export type RecordingStatus = 'idle' | 'recording' | 'finished_pending_save';
+
+export interface RecordingStats {
+  startedAtMs: number;
+  /** null tant que l'enregistrement n'est pas termine (Fini pas encore appuye). */
+  endedAtMs: number | null;
+  elapsedSeconds: number;
+  distanceCoveredMeters: number;
+  elevationGainMeters: number | null;
+  maxSpeedMetersPerSecond: number | null;
+  avgSpeedMetersPerSecond: number | null;
 }
 
 export type ThemeMode = 'light' | 'dark' | 'system';
