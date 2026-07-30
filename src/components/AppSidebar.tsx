@@ -1,14 +1,24 @@
 import { useEffect, useState } from 'react';
 import type { User } from 'firebase/auth';
+import { LATEST_RELEASE } from '../data/changelog';
+import { ToggleSwitch } from './ToggleSwitch';
 import type { Settings } from '../types';
 
-export type SidebarDestination = 'discovery' | 'my-rides' | 'favorites' | 'fuel-log';
+export type SidebarDestination =
+  | 'discovery'
+  | 'my-rides'
+  | 'favorites'
+  | 'fuel-log'
+  | 'statistics'
+  | 'feedback'
+  | 'feedback-admin';
 
 interface AppSidebarProps {
   user: User | null;
   isLoading: boolean;
   pseudo: string | null;
   settings: Settings;
+  canModerate: boolean;
   onSignIn: () => void;
   onSignOut: () => void;
   onUpdatePseudo: (pseudo: string) => void;
@@ -22,6 +32,7 @@ export function AppSidebar({
   isLoading,
   pseudo,
   settings,
+  canModerate,
   onSignIn,
   onSignOut,
   onUpdatePseudo,
@@ -95,58 +106,45 @@ export function AppSidebar({
           )}
           {user && (
             <button type="button" className="button button-ghost" onClick={() => onNavigate('fuel-log')}>
-              Carnet de plein
+              Carnet de pleins
+            </button>
+          )}
+          {user && (
+            <button type="button" className="button button-ghost" onClick={() => onNavigate('statistics')}>
+              Statistiques
+            </button>
+          )}
+          {user && (
+            <button type="button" className="button button-ghost" onClick={() => onNavigate('feedback')}>
+              Envoyer un commentaire
+            </button>
+          )}
+          {user && canModerate && (
+            <button type="button" className="button button-ghost" onClick={() => onNavigate('feedback-admin')}>
+              Feedbacks
             </button>
           )}
         </nav>
 
-        <fieldset className="sidebar-field">
-          <legend>Unité de distance</legend>
-          <div className="sidebar-field-options">
-            <label>
-              <input
-                type="radio"
-                name="unitSystem"
-                checked={settings.unitSystem === 'metric'}
-                onChange={() => onUpdateSettings({ unitSystem: 'metric' })}
-              />
-              Métrique (km)
-            </label>
-            <label>
-              <input
-                type="radio"
-                name="unitSystem"
-                checked={settings.unitSystem === 'imperial'}
-                onChange={() => onUpdateSettings({ unitSystem: 'imperial' })}
-              />
-              Impérial (mi)
-            </label>
-          </div>
-        </fieldset>
+        <div className="sidebar-field">
+          <span className="sidebar-field-title">Unité de distance</span>
+          <ToggleSwitch
+            checked={settings.unitSystem === 'imperial'}
+            onChange={(isImperial) => onUpdateSettings({ unitSystem: isImperial ? 'imperial' : 'metric' })}
+            leftLabel="Métrique (km)"
+            rightLabel="Impérial (mi)"
+          />
+        </div>
 
-        <fieldset className="sidebar-field">
-          <legend>Unité carburant</legend>
-          <div className="sidebar-field-options">
-            <label>
-              <input
-                type="radio"
-                name="fuelUnit"
-                checked={settings.fuelUnit === 'liters'}
-                onChange={() => onUpdateSettings({ fuelUnit: 'liters' })}
-              />
-              Litres
-            </label>
-            <label>
-              <input
-                type="radio"
-                name="fuelUnit"
-                checked={settings.fuelUnit === 'gallons'}
-                onChange={() => onUpdateSettings({ fuelUnit: 'gallons' })}
-              />
-              Gallons
-            </label>
-          </div>
-        </fieldset>
+        <div className="sidebar-field">
+          <span className="sidebar-field-title">Unité carburant</span>
+          <ToggleSwitch
+            checked={settings.fuelUnit === 'gallons'}
+            onChange={(isGallons) => onUpdateSettings({ fuelUnit: isGallons ? 'gallons' : 'liters' })}
+            leftLabel="Litres"
+            rightLabel="Gallons"
+          />
+        </div>
 
         <fieldset className="sidebar-field">
           <legend>Thème</legend>
@@ -182,6 +180,14 @@ export function AppSidebar({
         </fieldset>
 
         <p className="sidebar-hint">Le choix de la langue arrive dans une prochaine mise à jour.</p>
+
+        {LATEST_RELEASE && (
+          <p className="sidebar-release-note">
+            Dernière mise à jour : {new Date(LATEST_RELEASE.dateIso).toLocaleDateString('fr-FR')}
+            <br />
+            {LATEST_RELEASE.summary}
+          </p>
+        )}
       </aside>
     </div>
   );

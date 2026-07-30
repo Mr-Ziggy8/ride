@@ -73,6 +73,11 @@ export interface Ride {
   bounds: [number, number, number, number];
   /** null si la geolocalisation inverse a echoue/timeout au moment de la sauvegarde. */
   regionLabel: string | null;
+  /** Saisis manuellement a la sauvegarde (distinct de regionLabel, purement informatif) - servent au filtrage. */
+  country: string | null;
+  region: string | null;
+  downloadCount: number;
+  followCount: number;
 }
 
 /** Point bufferise localement pendant un enregistrement, avant aplatissement en StoredTrackPoint a la sauvegarde. */
@@ -106,4 +111,14 @@ export interface Settings {
   fuelUnit: FuelUnit;
   theme: ThemeMode;
   language: Language;
+}
+
+export type UserRoleType = 'free' | 'paid' | 'moderator' | 'admin';
+
+/** Jamais modifiable depuis le client (voir firestore.rules match /roles/{uid}) -
+ * uniquement via une future fonction serveur (paiement Stripe ou code promo verifie). */
+export interface UserRole {
+  type: UserRoleType;
+  grantedAt: number | null;
+  grantedVia: 'stripe' | 'promo_code' | 'admin_manual' | null;
 }

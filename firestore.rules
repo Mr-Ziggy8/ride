@@ -2,10 +2,46 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
+    function roleType(uid) {
+      return exists(/databases/$(database)/documents/roles/$(uid))
+        ? get(/databases/$(database)/documents/roles/$(uid)).data.type
+        : 'free';
+    }
+
+    function isModerator() {
+      return request.auth != null && roleType(request.auth.uid) in ['moderator', 'admin'];
+    }
+
     match /rides/{rideId} {
       allow read: if resource.data.visibility == 'public' || request.auth.uid == resource.data.ownerId;
       allow create: if request.auth != null && request.auth.uid == request.resource.data.ownerId;
-      allow update, delete: if request.auth != null && request.auth.uid == resource.data.ownerId;
+
+      // Trois cas distincts : le proprietaire garde un acces complet ; un
+      // moderateur/admin ne peut que renommer (jamais toucher geometrie/
+      // visibilite/ownerId d'un parcours qui n'est pas le sien) ; n'importe
+      // quel utilisateur authentifie peut incrementer les compteurs
+      // d'engagement d'un parcours public (telechargement/suivi).
+      allow update: if request.auth != null && (
+        request.auth.uid == resource.data.ownerId ||
+        (isModerator() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['title'])) ||
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['downloadCount', 'followCount'])
+      );
+
+      allow delete: if request.auth != null && (request.auth.uid == resource.data.ownerId || isModerator());
+
+      // Presence pure (le doc existe ou non) pour compter les utilisateurs
+      // distincts ayant telecharge/suivi - jamais relu cote client.
+      match /downloadedBy/{uid} {
+        allow read: if false;
+        allow create: if request.auth != null && request.auth.uid == uid;
+        allow update, delete: if false;
+      }
+
+      match /followedBy/{uid} {
+        allow read: if false;
+        allow create: if request.auth != null && request.auth.uid == uid;
+        allow update, delete: if false;
+      }
     }
 
     match /users/{uid} {
@@ -17,6 +53,40 @@ service cloud.firestore {
 
       match /fuelLogs/{entryId} {
         allow read, write: if request.auth != null && request.auth.uid == uid;
+      }
+    }
+
+    // Role de compte (free/paid/moderator/admin). Lecture seule pour le
+    // proprietaire (adapte son UI) - AUCUNE ecriture cote client, meme le
+    // proprietaire : seule une fonction serveur (Admin SDK, contourne ces
+    // regles) peut l'ecrire, suite a un paiement Stripe verifie ou un code
+    // promo valide. Sans ca, n'importe qui pourrait s'auto-attribuer Admin
+    // depuis la console JS du navigateur.
+    match /roles/{uid} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow write: if false;
+    }
+
+    // Meme logique que roles : jamais accede directement par le client, geree
+    // entierement par la fonction serveur de redemption de code promo.
+    match /promoCodes/{code} {
+      allow read, write: if false;
+    }
+
+    match /feedback/{entryId} {
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.uid;
+      allow read: if isModerator();
+
+      // Seul le champ score bouge (vote +1/-1) - message/uid/createdAt restent
+      // immuables une fois le commentaire envoye.
+      allow update: if isModerator() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['score']);
+      allow delete: if isModerator();
+
+      // Un vote par moderateur/admin par commentaire (meme mecanisme de
+      // presence create-only que rides/{rideId}/downloadedBy).
+      match /votes/{uid} {
+        allow create: if isModerator() && request.auth.uid == uid;
+        allow read, update, delete: if false;
       }
     }
   }

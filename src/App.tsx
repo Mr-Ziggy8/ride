@@ -2,31 +2,54 @@ import { useEffect, useMemo, useState } from 'react';
 import { AppSidebar, type SidebarDestination } from './components/AppSidebar';
 import { DiscoveryView } from './components/DiscoveryView';
 import { FavoritesView } from './components/FavoritesView';
+import { FeedbackAdminView } from './components/FeedbackAdminView';
+import { FeedbackView } from './components/FeedbackView';
 import { FuelLogView } from './components/FuelLogView';
 import { GpxUploader } from './components/GpxUploader';
 import { MapView } from './components/MapView';
 import { MyRidesView } from './components/MyRidesView';
+import { PremiumUnlockView } from './components/PremiumUnlockView';
 import { ProgressPanel } from './components/ProgressPanel';
 import { ElevationChart } from './components/ElevationChart';
 import { RecordingScreen } from './components/RecordingScreen';
 import { SaveRideDialog } from './components/SaveRideDialog';
+import { StatisticsView } from './components/StatisticsView';
 import { useAuth } from './hooks/useAuth';
 import { useGeolocation } from './hooks/useGeolocation';
 import { useProfile } from './hooks/useProfile';
 import { useRouteRecording } from './hooks/useRouteRecording';
 import { useSettings } from './hooks/useSettings';
+import { useUserRole } from './hooks/useUserRole';
 import { useWakeLock } from './hooks/useWakeLock';
+import { canAccessPremium, canModerate } from './utils/roleStorage';
 import { computePaceEstimate, projectPosition } from './utils/trackMath';
 import { clearStoredTrack, loadStoredTrack, storeTrack } from './utils/trackStorage';
-import { saveRecordedRide, saveRide, toTrackData } from './utils/rideStorage';
+import { recordRideFollow, saveRecordedRide, saveRide, toTrackData } from './utils/rideStorage';
 import type { GpxParseResult } from './utils/gpxParser';
 import type { Ride, RideVisibility, TrackData } from './types';
 
 const DEFAULT_OFF_TRACK_THRESHOLD_METERS = 50;
 
-type ViewMode = 'main' | 'my-rides' | 'discovery' | 'favorites' | 'fuel-log';
+type ViewMode =
+  | 'main'
+  | 'my-rides'
+  | 'discovery'
+  | 'favorites'
+  | 'fuel-log'
+  | 'statistics'
+  | 'feedback'
+  | 'feedback-admin';
 
-const VALID_VIEWS: ViewMode[] = ['main', 'my-rides', 'discovery', 'favorites', 'fuel-log'];
+const VALID_VIEWS: ViewMode[] = [
+  'main',
+  'my-rides',
+  'discovery',
+  'favorites',
+  'fuel-log',
+  'statistics',
+  'feedback',
+  'feedback-admin',
+];
 
 function isValidView(value: unknown): value is ViewMode {
   return typeof value === 'string' && (VALID_VIEWS as string[]).includes(value);
@@ -54,6 +77,7 @@ function App() {
   const auth = useAuth();
   const { settings, updateSettings } = useSettings(auth.user);
   const profile = useProfile(auth.user);
+  const { role } = useUserRole(auth.user);
   const geo = useGeolocation();
   const wakeLock = useWakeLock();
   const recording = useRouteRecording();
@@ -118,12 +142,24 @@ function App() {
 
   // Filet de sécurité : si on se déconnecte (ou revient via l'historique) alors
   // qu'on est sur une vue qui nécessite un compte, on ne doit jamais rester bloqué
-  // sur un écran vide.
+  // sur un écran vide. Pareil si le rôle ne permet plus la modération (accès
+  // perdu entre-temps) alors qu'on est sur la vue Feedbacks.
   useEffect(() => {
-    if (!auth.user && (view === 'my-rides' || view === 'favorites' || view === 'fuel-log')) {
+    const requiresAccount =
+      view === 'my-rides' ||
+      view === 'favorites' ||
+      view === 'fuel-log' ||
+      view === 'statistics' ||
+      view === 'feedback' ||
+      view === 'feedback-admin';
+    if (!auth.user && requiresAccount) {
+      setView('main');
+      return;
+    }
+    if (view === 'feedback-admin' && !canModerate(role.type)) {
       setView('main');
     }
-  }, [auth.user, view]);
+  }, [auth.user, view, role.type]);
 
   const projected = useMemo(() => {
     if (!track || !geo.position) return null;
@@ -145,6 +181,24 @@ function App() {
     const elapsedSeconds = (geo.position.timestampMs - geo.sessionStartMs) / 1000;
     return computePaceEstimate(projected.distanceAlongTrackMeters, track.totalDistanceMeters, elapsedSeconds);
   }, [track, projected, geo.sessionStartMs, geo.position]);
+
+  // Points de depart/arrivee pour la suggestion de titre "Ville A vers Ville B"
+  // dans SaveRideDialog - deux sources distinctes selon le flux (upload/follow vs enregistrement live).
+  const trackEndpoints = useMemo(() => {
+    if (!track) return { start: null, end: null };
+    const coords = track.geojson.geometry.coordinates;
+    if (coords.length === 0) return { start: null, end: null };
+    const [startLng, startLat] = coords[0];
+    const [endLng, endLat] = coords[coords.length - 1];
+    return { start: { lat: startLat, lng: startLng }, end: { lat: endLat, lng: endLng } };
+  }, [track]);
+
+  const recordingEndpoints = useMemo(() => {
+    if (recording.points.length === 0) return { start: null, end: null };
+    const first = recording.points[0];
+    const last = recording.points[recording.points.length - 1];
+    return { start: { lat: first.lat, lng: first.lng }, end: { lat: last.lat, lng: last.lng } };
+  }, [recording.points]);
 
   const handleParsed = (result: GpxParseResult) => {
     setTrack(result.track);
@@ -178,9 +232,14 @@ function App() {
     setIsSaveDialogOpen(true);
   };
 
-  const handleSaveRide = async (title: string, visibility: RideVisibility) => {
+  const handleSaveRide = async (
+    title: string,
+    visibility: RideVisibility,
+    country: string | null,
+    region: string | null,
+  ) => {
     if (!auth.user || !track) return;
-    await saveRide(auth.user, track, title, visibility, profile.pseudo);
+    await saveRide(auth.user, track, title, visibility, profile.pseudo, country, region);
     setIsSaveDialogOpen(false);
     setSaveSuccessMessage('Parcours sauvegardé.');
   };
@@ -201,10 +260,15 @@ function App() {
     recording.finish();
   };
 
-  const handleSaveRecordedRide = async (title: string, visibility: RideVisibility) => {
+  const handleSaveRecordedRide = async (
+    title: string,
+    visibility: RideVisibility,
+    country: string | null,
+    region: string | null,
+  ) => {
     if (!auth.user) return;
     const storedPoints = recording.points.map(({ lng, lat, ele }) => ({ lng, lat, ele }));
-    await saveRecordedRide(auth.user, storedPoints, recording.stats, title, visibility, profile.pseudo);
+    await saveRecordedRide(auth.user, storedPoints, recording.stats, title, visibility, profile.pseudo, country, region);
     recording.discard();
     setSaveSuccessMessage('Parcours enregistré et sauvegardé.');
   };
@@ -225,6 +289,9 @@ function App() {
     setUploadError(null);
     setSaveSuccessMessage(null);
     storeTrack({ track: loadedTrack, warning: null });
+    if (auth.user) {
+      void recordRideFollow(ride.id, auth.user.uid).catch((err) => console.error(err));
+    }
     closeView();
   };
 
@@ -276,6 +343,7 @@ function App() {
           isLoading={auth.isLoading}
           pseudo={profile.pseudo}
           settings={settings}
+          canModerate={canModerate(role.type)}
           onSignIn={auth.signInWithGoogle}
           onSignOut={handleSignOut}
           onUpdatePseudo={profile.updatePseudo}
@@ -289,6 +357,7 @@ function App() {
         <DiscoveryView
           user={auth.user}
           unitSystem={settings.unitSystem}
+          canModerate={canModerate(role.type)}
           onLoadRide={handleLoadRide}
           onClose={closeView}
         />
@@ -312,13 +381,23 @@ function App() {
         />
       )}
 
-      {view === 'fuel-log' && auth.user && (
+      {view === 'fuel-log' && auth.user && !canAccessPremium(role.type) && <PremiumUnlockView onClose={closeView} />}
+      {view === 'fuel-log' && auth.user && canAccessPremium(role.type) && (
         <FuelLogView
           user={auth.user}
           unitSystem={settings.unitSystem}
           fuelUnit={settings.fuelUnit}
           onClose={closeView}
         />
+      )}
+
+      {view === 'statistics' && auth.user && !canAccessPremium(role.type) && <PremiumUnlockView onClose={closeView} />}
+      {view === 'statistics' && auth.user && canAccessPremium(role.type) && <StatisticsView onClose={closeView} />}
+
+      {view === 'feedback' && auth.user && <FeedbackView user={auth.user} onClose={closeView} />}
+
+      {view === 'feedback-admin' && auth.user && canModerate(role.type) && (
+        <FeedbackAdminView user={auth.user} onClose={closeView} />
       )}
 
       {view === 'main' && isRecordingActive && (
@@ -389,6 +468,8 @@ function App() {
       {isSaveDialogOpen && track && auth.user && (
         <SaveRideDialog
           defaultTitle={`Parcours du ${new Date().toLocaleDateString('fr-FR')}`}
+          startPoint={trackEndpoints.start}
+          endPoint={trackEndpoints.end}
           onSave={handleSaveRide}
           onCancel={() => setIsSaveDialogOpen(false)}
         />
@@ -397,6 +478,8 @@ function App() {
       {recording.status === 'finished_pending_save' && auth.user && (
         <SaveRideDialog
           defaultTitle={`Parcours du ${new Date().toLocaleDateString('fr-FR')}`}
+          startPoint={recordingEndpoints.start}
+          endPoint={recordingEndpoints.end}
           onSave={handleSaveRecordedRide}
           onCancel={handleDiscardRecording}
         />

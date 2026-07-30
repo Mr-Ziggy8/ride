@@ -5,10 +5,13 @@ import {
   deleteDoc,
   doc,
   getDocs,
+  increment,
   orderBy,
   query,
   serverTimestamp,
+  setDoc,
   Timestamp,
+  updateDoc,
   where,
   type DocumentData,
   type QueryDocumentSnapshot,
@@ -48,6 +51,8 @@ export async function saveRide(
   title: string,
   visibility: RideVisibility,
   pseudo: string | null,
+  country: string | null,
+  region: string | null,
 ): Promise<string> {
   const centerLng = (track.bounds[0] + track.bounds[2]) / 2;
   const centerLat = (track.bounds[1] + track.bounds[3]) / 2;
@@ -64,6 +69,10 @@ export async function saveRide(
     trackPoints: toStoredTrackPoints(simplifyForDisplay(track.geojson)),
     bounds: track.bounds,
     regionLabel,
+    country,
+    region,
+    downloadCount: 0,
+    followCount: 0,
   });
   return docRef.id;
 }
@@ -78,6 +87,8 @@ export async function saveRecordedRide(
   title: string,
   visibility: RideVisibility,
   pseudo: string | null,
+  country: string | null,
+  region: string | null,
 ): Promise<string> {
   const bounds = computeBounds(points.map((p) => [p.lng, p.lat]));
   const centerLng = (bounds[0] + bounds[2]) / 2;
@@ -108,8 +119,51 @@ export async function saveRecordedRide(
     trackPoints: toStoredTrackPoints(simplifyForDisplay(line)),
     bounds,
     regionLabel,
+    country,
+    region,
+    downloadCount: 0,
+    followCount: 0,
   });
   return docRef.id;
+}
+
+/** Moderateur/Admin uniquement (voir firestore.rules) - ne touche que le titre. */
+export async function renameRide(rideId: string, title: string): Promise<void> {
+  await updateDoc(doc(db, 'rides', rideId), { title });
+}
+
+/**
+ * Compte les utilisateurs DISTINCTS ayant telecharge/suivi un parcours, pas un
+ * journal d'evenements. S'appuie sur la distinction create/update des Security
+ * Rules : le doc de presence n'autorise que la creation, jamais l'ecrasement -
+ * si l'ecriture echoue, l'utilisateur a deja ete compte, on n'incremente pas
+ * une seconde fois. Best-effort : ne bloque jamais l'action reelle (telechargement/suivi).
+ */
+async function recordPresenceOnce(
+  rideId: string,
+  subcollection: 'downloadedBy' | 'followedBy',
+  uid: string,
+): Promise<boolean> {
+  try {
+    await setDoc(doc(db, 'rides', rideId, subcollection, uid), { at: serverTimestamp() });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export async function recordRideDownload(rideId: string, uid: string): Promise<void> {
+  const isFirstTime = await recordPresenceOnce(rideId, 'downloadedBy', uid);
+  if (isFirstTime) {
+    await updateDoc(doc(db, 'rides', rideId), { downloadCount: increment(1) });
+  }
+}
+
+export async function recordRideFollow(rideId: string, uid: string): Promise<void> {
+  const isFirstTime = await recordPresenceOnce(rideId, 'followedBy', uid);
+  if (isFirstTime) {
+    await updateDoc(doc(db, 'rides', rideId), { followCount: increment(1) });
+  }
 }
 
 export function mapRideDoc(docSnapshot: QueryDocumentSnapshot<DocumentData>): Ride {
@@ -126,6 +180,10 @@ export function mapRideDoc(docSnapshot: QueryDocumentSnapshot<DocumentData>): Ri
     trackPoints: data.trackPoints,
     bounds: data.bounds,
     regionLabel: data.regionLabel ?? null,
+    country: data.country ?? null,
+    region: data.region ?? null,
+    downloadCount: data.downloadCount ?? 0,
+    followCount: data.followCount ?? 0,
   } satisfies Ride;
 }
 

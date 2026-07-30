@@ -11,6 +11,7 @@ interface RideListScreenProps {
   renderMeta: (ride: Ride) => ReactNode;
   renderActions: (ride: Ride) => ReactNode;
   onClose: () => void;
+  filtersSlot?: ReactNode;
 }
 
 export function RideListScreen({
@@ -22,6 +23,7 @@ export function RideListScreen({
   renderMeta,
   renderActions,
   onClose,
+  filtersSlot,
 }: RideListScreenProps) {
   return (
     <main className="my-rides-screen">
@@ -31,6 +33,8 @@ export function RideListScreen({
           Retour
         </button>
       </div>
+
+      {filtersSlot}
 
       {isLoading && <p className="my-rides-hint">Chargement...</p>}
       {error && <div className="banner banner-error">{error}</div>}
