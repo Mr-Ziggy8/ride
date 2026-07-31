@@ -397,21 +397,23 @@ function App() {
       )}
 
       {view === 'upload' && (
-        <main className="upload-screen">
+        <main className="my-rides-screen">
           <div className="my-rides-header">
             <h2>Charger un GPX</h2>
             <button type="button" className="button button-ghost" onClick={closeView}>
               Retour
             </button>
           </div>
-          <p>Chargez un fichier GPX pour afficher son tracé et suivre votre position en direct.</p>
-          <GpxUploader
-            onParsed={(result) => {
-              handleParsed(result);
-              closeView();
-            }}
-            onError={setUploadError}
-          />
+          <div className="upload-prompt">
+            <p>Chargez un fichier GPX pour afficher son tracé et suivre votre position en direct.</p>
+            <GpxUploader
+              onParsed={(result) => {
+                handleParsed(result);
+                closeView();
+              }}
+              onError={setUploadError}
+            />
+          </div>
         </main>
       )}
 

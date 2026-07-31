@@ -202,6 +202,19 @@ h1 {
   color: var(--text-dim);
 }
 
+/* Contenu de la vue "Charger un GPX" (dans .my-rides-screen, qui garde le
+ * header en haut) - centre uniquement le prompt/bouton, pas le header. */
+.upload-prompt {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  text-align: center;
+  color: var(--text-dim);
+}
+
 .home-screen {
   flex: 1;
   overflow-y: auto;
@@ -514,6 +527,7 @@ h1 {
 .my-rides-item {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   justify-content: space-between;
   gap: 12px;
   background: var(--surface);
@@ -526,7 +540,8 @@ h1 {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  min-width: 0;
+  flex: 1 1 140px;
+  min-width: 120px;
 }
 
 .my-rides-item-title {
@@ -560,7 +575,10 @@ h1 {
 .my-rides-item-actions {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 8px;
+  max-width: 100%;
   flex-shrink: 0;
 }
 
