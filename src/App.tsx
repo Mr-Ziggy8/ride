@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { AppSidebar, type SidebarDestination } from './components/AppSidebar';
 import { DiscoveryView } from './components/DiscoveryView';
 import { FavoritesView } from './components/FavoritesView';
@@ -83,19 +83,26 @@ function App() {
   const recording = useRouteRecording();
   const isRecordingActive = recording.status !== 'idle';
 
+  // geo/wakeLock/recording sont de nouveaux objets a chaque render (position qui
+  // bouge, etc.) - passer par des refs evite de les lister dans les deps des effects
+  // ci-dessous, ce qui re-couperait/rouvrirait le watch GPS a chaque nouvelle position.
+  const geoRef = useRef(geo);
+  geoRef.current = geo;
+  const wakeLockRef = useRef(wakeLock);
+  wakeLockRef.current = wakeLock;
+  const recordingRef = useRef(recording);
+  recordingRef.current = recording;
+
   // Maintient watchPosition + wake lock actifs tant que le statut est 'recording' :
   // couvre a la fois le demarrage explicite (Nouveau parcours) et la reprise apres
   // un reload d'onglet (le buffer de points survit en localStorage, mais
-  // watchPosition/wakeLock doivent eux redemarrer explicitement). geo.start/
-  // wakeLock.request sont stables (useCallback a deps figes) : le lint react-hooks
-  // reclame les objets geo/wakeLock entiers, mais les ajouter re-declencherait
-  // l'effet (et re-couperait/rouvrirait le watch GPS) a chaque nouvelle position.
+  // watchPosition/wakeLock doivent eux redemarrer explicitement).
   useEffect(() => {
     if (recording.status === 'recording') {
-      geo.start();
-      void wakeLock.request();
+      geoRef.current.start();
+      void wakeLockRef.current.request();
     }
-  }, [geo.start, wakeLock.request, recording.status]);
+  }, [recording.status]);
 
   /** history.back() : le bouton retour Android/Chrome (pas seulement le bouton
    * "Retour" interne) fonctionne aussi, puisque chaque vue/menu est une vraie
@@ -168,13 +175,11 @@ function App() {
 
   const isOffTrack = projected !== null && projected.perpendicularOffsetMeters > offTrackThresholdMeters;
 
-  // recording.addPosition est stable (useCallback a deps figes) : meme limitation
-  // du lint react-hooks que ci-dessus, le reste des deps est correct et suffisant.
   useEffect(() => {
     if (recording.status === 'recording' && geo.position) {
-      recording.addPosition(geo.position);
+      recordingRef.current.addPosition(geo.position);
     }
-  }, [geo.position, recording.status, recording.addPosition]);
+  }, [geo.position, recording.status]);
 
   const paceEstimate = useMemo(() => {
     if (!track || !projected || geo.sessionStartMs === null || !geo.position) return null;
