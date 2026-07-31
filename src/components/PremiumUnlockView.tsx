@@ -4,19 +4,34 @@ import type { User } from 'firebase/auth';
 interface PremiumUnlockViewProps {
   user: User;
   onClose: () => void;
+  onRoleGranted: () => void;
 }
 
+interface RedeemErrorBody {
+  error?: string;
+}
+
+const PROMO_ERROR_MESSAGES: Record<string, string> = {
+  code_not_found: 'Code invalide.',
+  already_redeemed: 'Ce code a déjà été utilisé.',
+  invalid_code_format: 'Format de code invalide.',
+};
+
 /** Ecran affiche a un Free-User qui accede a une feature payante (Statistiques,
- * Carnet de pleins). Paiement unique via Stripe Checkout (voir api/create-checkout-session,
- * api/stripe-webhook) - deblocage a vie, pas d'abonnement. La redemption de code
- * promo n'est elle pas encore branchee. */
-export function PremiumUnlockView({ user, onClose }: PremiumUnlockViewProps) {
+ * Carnet de pleins). Deux chemins vers 'paid', tous les deux valides
+ * uniquement cote serveur (api/) : paiement unique Stripe, ou code promo. */
+export function PremiumUnlockView({ user, onClose, onRoleGranted }: PremiumUnlockViewProps) {
   const [isRedirecting, setIsRedirecting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
+
+  const [promoCode, setPromoCode] = useState('');
+  const [isRedeeming, setIsRedeeming] = useState(false);
+  const [promoError, setPromoError] = useState<string | null>(null);
+  const [promoSuccess, setPromoSuccess] = useState(false);
 
   const handleUpgrade = async () => {
     setIsRedirecting(true);
-    setError(null);
+    setCheckoutError(null);
     try {
       const idToken = await user.getIdToken();
       const response = await fetch('/api/create-checkout-session', {
@@ -28,8 +43,38 @@ export function PremiumUnlockView({ user, onClose }: PremiumUnlockViewProps) {
       window.location.href = url;
     } catch (err) {
       console.error(err);
-      setError('Impossible de démarrer le paiement. Réessaie.');
+      setCheckoutError('Impossible de démarrer le paiement. Réessaie.');
       setIsRedirecting(false);
+    }
+  };
+
+  const handleRedeemPromoCode = async () => {
+    const trimmed = promoCode.trim();
+    if (!trimmed) return;
+
+    setIsRedeeming(true);
+    setPromoError(null);
+    setPromoSuccess(false);
+    try {
+      const idToken = await user.getIdToken();
+      const response = await fetch('/api/redeem-promo-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
+        body: JSON.stringify({ code: trimmed }),
+      });
+      const body = (await response.json()) as RedeemErrorBody;
+      if (!response.ok) {
+        setPromoError(PROMO_ERROR_MESSAGES[body.error ?? ''] ?? 'Échec de la validation. Réessaie.');
+        return;
+      }
+      setPromoSuccess(true);
+      setPromoCode('');
+      onRoleGranted();
+    } catch (err) {
+      console.error(err);
+      setPromoError('Échec de la validation. Réessaie.');
+    } finally {
+      setIsRedeeming(false);
     }
   };
 
@@ -45,7 +90,7 @@ export function PremiumUnlockView({ user, onClose }: PremiumUnlockViewProps) {
       <div className="premium-unlock-body">
         <p>Débloque les statistiques avancées et le carnet de pleins, à vie, en un seul paiement.</p>
 
-        {error && <p className="dialog-error">{error}</p>}
+        {checkoutError && <p className="dialog-error">{checkoutError}</p>}
 
         <button type="button" className="button button-primary" onClick={handleUpgrade} disabled={isRedirecting}>
           {isRedirecting ? 'Redirection...' : 'Passer Premium'}
@@ -53,9 +98,31 @@ export function PremiumUnlockView({ user, onClose }: PremiumUnlockViewProps) {
 
         <label className="dialog-field">
           Code promo
-          <input type="text" placeholder="Bientôt disponible" disabled maxLength={40} />
+          <input
+            type="text"
+            value={promoCode}
+            onChange={(event) => {
+              setPromoCode(event.target.value);
+              setPromoError(null);
+              setPromoSuccess(false);
+            }}
+            placeholder="Ex: LAUNCH100"
+            maxLength={40}
+            disabled={isRedeeming}
+          />
         </label>
-        <p className="my-rides-hint">La validation des codes promo n'est pas encore activée.</p>
+
+        {promoError && <p className="dialog-error">{promoError}</p>}
+        {promoSuccess && <div className="banner banner-success">Code validé, tu es maintenant Premium !</div>}
+
+        <button
+          type="button"
+          className="button button-ghost"
+          onClick={handleRedeemPromoCode}
+          disabled={isRedeeming || !promoCode.trim()}
+        >
+          {isRedeeming ? 'Validation...' : 'Valider le code'}
+        </button>
       </div>
     </main>
   );

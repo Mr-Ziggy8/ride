@@ -1,11 +1,13 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { FieldValue } from 'firebase-admin/firestore';
 import Stripe from 'stripe';
-import { adminDb } from './_lib/firebaseAdmin.js';
+import { grantPaidRoleUnlessAlreadyHigher } from './_lib/roles.js';
 
 // Necessaire pour verifier la signature Stripe, qui porte sur le corps BRUT de
 // la requete - un body deja parse en JSON par Vercel ne matcherait plus.
 export const config = { api: { bodyParser: false } };
+
+// Cree une seule fois par instance chaude plutot qu'a chaque requete.
+const stripe = process.env.STRIPE_SECRET_KEY ? new Stripe(process.env.STRIPE_SECRET_KEY) : null;
 
 async function readRawBody(req: VercelRequest): Promise<Buffer> {
   const chunks: Buffer[] = [];
@@ -15,22 +17,6 @@ async function readRawBody(req: VercelRequest): Promise<Buffer> {
   return Buffer.concat(chunks);
 }
 
-/** N'ecrase jamais un role deja egal ou superieur a 'paid' (moderator/admin,
- * ou 'paid' deja accorde) - evite qu'un rejeu du webhook ou un moderateur qui
- * testerait son propre paiement ne se retrouve retrograde. */
-async function grantPaidRoleUnlessAlreadyHigher(uid: string): Promise<void> {
-  const ref = adminDb.collection('roles').doc(uid);
-  const snapshot = await ref.get();
-  const currentType = snapshot.exists ? (snapshot.data()?.type as string | undefined) : undefined;
-  if (currentType === 'moderator' || currentType === 'admin' || currentType === 'paid') return;
-
-  await ref.set({
-    type: 'paid',
-    grantedAt: FieldValue.serverTimestamp(),
-    grantedVia: 'stripe',
-  });
-}
-
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
     res.status(405).json({ error: 'method_not_allowed' });
@@ -38,15 +24,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const signature = req.headers['stripe-signature'];
-  const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
-  if (!signature || !stripeSecretKey || !webhookSecret) {
-    console.error('Signature Stripe ou secrets serveur manquants.');
+  if (!signature || !stripe || !webhookSecret) {
+    console.error('Signature Stripe absente ou secrets serveur manquants.');
     res.status(500).json({ error: 'server_misconfigured' });
     return;
   }
 
-  const stripe = new Stripe(stripeSecretKey);
   const rawBody = await readRawBody(req);
 
   let event: Stripe.Event;
@@ -62,7 +46,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const session = event.data.object as Stripe.Checkout.Session;
     const uid = session.client_reference_id ?? (session.metadata?.uid as string | undefined);
     if (uid && session.payment_status === 'paid') {
-      await grantPaidRoleUnlessAlreadyHigher(uid);
+      // Pas de try/catch ici : une erreur Firestore transitoire doit faire
+      // echouer la reponse (non-2xx) pour que Stripe rejoue le webhook plus
+      // tard - l'avaler silencieusement perdrait un paiement reel.
+      await grantPaidRoleUnlessAlreadyHigher(uid, 'stripe');
     }
   }
 

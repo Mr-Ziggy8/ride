@@ -59,7 +59,7 @@ function App() {
   const auth = useAuth();
   const { settings, updateSettings } = useSettings(auth.user);
   const profile = useProfile(auth.user);
-  const { role } = useUserRole(auth.user);
+  const { role, refresh: refreshRole } = useUserRole(auth.user);
   const geo = useGeolocation();
   const wakeLock = useWakeLock();
   const recording = useRouteRecording();
@@ -366,7 +366,9 @@ function App() {
         />
       )}
 
-      {view === 'fuel-log' && auth.user && !canAccessPremium(role.type) && <PremiumUnlockView user={auth.user} onClose={closeView} />}
+      {view === 'fuel-log' && auth.user && !canAccessPremium(role.type) && (
+        <PremiumUnlockView user={auth.user} onClose={closeView} onRoleGranted={refreshRole} />
+      )}
       {view === 'fuel-log' && auth.user && canAccessPremium(role.type) && (
         <FuelLogView
           user={auth.user}
@@ -376,7 +378,9 @@ function App() {
         />
       )}
 
-      {view === 'statistics' && auth.user && !canAccessPremium(role.type) && <PremiumUnlockView user={auth.user} onClose={closeView} />}
+      {view === 'statistics' && auth.user && !canAccessPremium(role.type) && (
+        <PremiumUnlockView user={auth.user} onClose={closeView} onRoleGranted={refreshRole} />
+      )}
       {view === 'statistics' && auth.user && canAccessPremium(role.type) && <StatisticsView onClose={closeView} />}
 
       {view === 'feedback' && auth.user && <FeedbackView user={auth.user} onClose={closeView} />}

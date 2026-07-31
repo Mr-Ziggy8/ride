@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { User } from 'firebase/auth';
 import { FREE_ROLE, fetchUserRole } from '../utils/roleStorage';
 import type { UserRole } from '../types';
@@ -6,12 +6,16 @@ import type { UserRole } from '../types';
 export interface UseUserRoleResult {
   role: UserRole;
   isLoading: boolean;
+  refresh: () => void;
 }
 
-/** Lecture seule, one-shot (pas de listener temps reel - le role change rarement). */
+/** Lecture seule. One-shot par defaut (le role change rarement), mais
+ * refresh() permet de re-lire tout de suite apres une redemption de code
+ * promo (ecrite cote serveur, invisible tant qu'on n'a pas re-fetch). */
 export function useUserRole(user: User | null): UseUserRoleResult {
   const [role, setRole] = useState<UserRole>(FREE_ROLE);
   const [isLoading, setIsLoading] = useState(true);
+  const [refreshToken, setRefreshToken] = useState(0);
 
   useEffect(() => {
     if (!user) {
@@ -35,7 +39,9 @@ export function useUserRole(user: User | null): UseUserRoleResult {
     return () => {
       cancelled = true;
     };
-  }, [user]);
+  }, [user, refreshToken]);
 
-  return { role, isLoading };
+  const refresh = useCallback(() => setRefreshToken((token) => token + 1), []);
+
+  return { role, isLoading, refresh };
 }
