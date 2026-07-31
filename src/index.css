@@ -202,6 +202,64 @@ h1 {
   color: var(--text-dim);
 }
 
+.home-screen {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px 16px;
+}
+
+.home-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  max-width: 480px;
+  margin: 0 auto;
+}
+
+.home-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+
+.home-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 18px 12px;
+  font: inherit;
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+  touch-action: manipulation;
+  text-align: center;
+}
+
+.home-card-icon {
+  font-size: 24px;
+  line-height: 1;
+}
+
+.home-stats-teaser {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px;
+}
+
+.home-stats-teaser .button {
+  width: 100%;
+}
+
 .tracker-screen {
   flex: 1;
   display: flex;

@@ -3,8 +3,12 @@ import distance from '@turf/distance';
 import { clearStoredRecording, loadStoredRecording, storeStoredRecording } from '../utils/recordingStorage';
 import type { LivePosition, RecordedTrackPoint, RecordingStats, RecordingStatus } from '../types';
 
-const MIN_SAMPLE_INTERVAL_MS = 5000;
-const MIN_SAMPLE_DISTANCE_METERS = 10;
+// Plus bas que l'ancien 5000ms/10m : a vitesse moto/voiture le seuil de distance
+// dominait deja (10m parcourus en <1s a 50km/h+), mais aux allures lentes/dans
+// les virages serres (ville, lacets) l'ancien reglage sautait assez de points
+// pour couper les courbes en ligne droite au lieu de suivre la route.
+const MIN_SAMPLE_INTERVAL_MS = 3000;
+const MIN_SAMPLE_DISTANCE_METERS = 5;
 
 export interface UseRouteRecordingResult {
   status: RecordingStatus;

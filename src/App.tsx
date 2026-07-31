@@ -6,6 +6,7 @@ import { FeedbackAdminView } from './components/FeedbackAdminView';
 import { FeedbackView } from './components/FeedbackView';
 import { FuelLogView } from './components/FuelLogView';
 import { GpxUploader } from './components/GpxUploader';
+import { HomeCards } from './components/HomeCards';
 import { MapView } from './components/MapView';
 import { MyRidesView } from './components/MyRidesView';
 import { PremiumUnlockView } from './components/PremiumUnlockView';
@@ -415,8 +416,13 @@ function App() {
       )}
 
       {view === 'main' && !track && !isRecordingActive && (
-        <main className="upload-screen">
-          <p>Ouvre le menu pour charger un fichier GPX ou démarrer un nouveau parcours.</p>
+        <main className="home-screen">
+          <HomeCards
+            user={auth.user}
+            unitSystem={settings.unitSystem}
+            canAccessPremium={canAccessPremium(role.type)}
+            onNavigate={navigateFromMenu}
+          />
         </main>
       )}
 

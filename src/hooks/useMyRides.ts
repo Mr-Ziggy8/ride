@@ -11,13 +11,18 @@ export interface UseMyRidesResult {
 }
 
 /** One-shot fetch (no realtime listener) on mount and whenever refresh() is called. */
-export function useMyRides(user: User): UseMyRidesResult {
+export function useMyRides(user: User | null): UseMyRidesResult {
   const [rides, setRides] = useState<Ride[] | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshToken, setRefreshToken] = useState(0);
 
   useEffect(() => {
+    if (!user) {
+      setRides(null);
+      setIsLoading(false);
+      return;
+    }
     let cancelled = false;
     setIsLoading(true);
     setError(null);
