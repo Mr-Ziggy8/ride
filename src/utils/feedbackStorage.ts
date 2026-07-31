@@ -25,7 +25,7 @@ export interface FeedbackEntry {
 /** Un commentaire reste "actif" tant qu'un moderateur ne l'a pas supprime (voir
  * FeedbackAdminView) - au-dela, on bloque l'envoi cote UI pour eviter qu'un
  * seul utilisateur ne noie la file de moderation. */
-export const MAX_ACTIVE_FEEDBACK_PER_USER = 5;
+export const MAX_ACTIVE_FEEDBACK_PER_USER = 10;
 
 export async function submitFeedback(uid: string, message: string): Promise<void> {
   await addDoc(collection(db, 'feedback'), {

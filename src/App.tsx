@@ -123,6 +123,15 @@ function App() {
     setIsMenuOpen(false);
   };
 
+  /** Fermer le menu (bouton "Fermer" ou tap en dehors) ne touche qu'a l'overlay -
+   * contrairement a closeView (bouton "Retour" d'une vue, ou bouton retour natif),
+   * ca ne ramene JAMAIS a main : ca revele simplement l'ecran deja ouvert avant
+   * l'ouverture du menu (main si on y etait, ou une autre vue si le menu a ete
+   * rouvert par-dessus). */
+  const closeMenu = () => {
+    setIsMenuOpen(false);
+  };
+
   useEffect(() => {
     // Le pop a deja eu lieu (geste utilisateur ou bouton retour natif) : on ne
     // fait que resynchroniser l'etat React, jamais un second history.back().
@@ -342,7 +351,7 @@ function App() {
         onUpdatePseudo={profile.updatePseudo}
         onUpdateSettings={updateSettings}
         onNavigate={navigateFromMenu}
-        onClose={closeView}
+        onClose={closeMenu}
       />
 
       {view === 'discovery' && (
