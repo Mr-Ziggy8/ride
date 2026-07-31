@@ -8,6 +8,11 @@ export interface ChangelogEntry {
  * pas de changelog du tout (ca dirait "developpement a l'arret"). */
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    dateIso: '2026-07-31',
+    summary:
+      "Nouvelle identité graphique, menu animé (tap extérieur pour fermer), chargement GPX déplacé dans le menu, retour toujours vers l'accueil, limite de 5 commentaires actifs.",
+  },
+  {
     dateIso: '2026-07-30',
     summary: 'Enregistrement de parcours en direct, menu unifié, carnet de pleins, export GPX.',
   },

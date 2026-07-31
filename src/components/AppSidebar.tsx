@@ -5,6 +5,7 @@ import { ToggleSwitch } from './ToggleSwitch';
 import type { Settings } from '../types';
 
 export type SidebarDestination =
+  | 'upload'
   | 'discovery'
   | 'my-rides'
   | 'favorites'
@@ -14,6 +15,7 @@ export type SidebarDestination =
   | 'feedback-admin';
 
 interface AppSidebarProps {
+  isOpen: boolean;
   user: User | null;
   isLoading: boolean;
   pseudo: string | null;
@@ -28,6 +30,7 @@ interface AppSidebarProps {
 }
 
 export function AppSidebar({
+  isOpen,
   user,
   isLoading,
   pseudo,
@@ -53,8 +56,16 @@ export function AppSidebar({
   };
 
   return (
-    <div className="sidebar-overlay" role="dialog" aria-modal="true" aria-label="Menu">
-      <aside className="sidebar">
+    <div
+      className={`sidebar-overlay${isOpen ? ' sidebar-overlay--open' : ''}`}
+      role="dialog"
+      aria-modal={isOpen || undefined}
+      aria-hidden={!isOpen}
+      aria-label="Menu"
+      inert={!isOpen}
+      onClick={onClose}
+    >
+      <aside className="sidebar" onClick={(event) => event.stopPropagation()}>
         <div className="sidebar-header">
           <h2>Menu</h2>
           <button type="button" className="button button-ghost" onClick={onClose}>
@@ -91,6 +102,9 @@ export function AppSidebar({
         </div>
 
         <nav className="sidebar-nav">
+          <button type="button" className="button button-ghost" onClick={() => onNavigate('upload')}>
+            Charger un GPX
+          </button>
           <button type="button" className="button button-ghost" onClick={() => onNavigate('discovery')}>
             Découverte
           </button>

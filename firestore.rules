@@ -75,7 +75,10 @@ service cloud.firestore {
 
     match /feedback/{entryId} {
       allow create: if request.auth != null && request.auth.uid == request.resource.data.uid;
-      allow read: if isModerator();
+      // Un moderateur voit tout ; un utilisateur ne relit que ses propres
+      // commentaires (necessaire pour que le client compte ses commentaires
+      // actifs et applique la limite de 5 avant d'en soumettre un nouveau).
+      allow read: if isModerator() || (request.auth != null && request.auth.uid == resource.data.uid);
 
       // Seul le champ score bouge (vote +1/-1) - message/uid/createdAt restent
       // immuables une fois le commentaire envoye.

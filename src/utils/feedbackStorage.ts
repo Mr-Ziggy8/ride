@@ -10,6 +10,7 @@ import {
   serverTimestamp,
   setDoc,
   updateDoc,
+  where,
 } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 
@@ -21,6 +22,11 @@ export interface FeedbackEntry {
   score: number;
 }
 
+/** Un commentaire reste "actif" tant qu'un moderateur ne l'a pas supprime (voir
+ * FeedbackAdminView) - au-dela, on bloque l'envoi cote UI pour eviter qu'un
+ * seul utilisateur ne noie la file de moderation. */
+export const MAX_ACTIVE_FEEDBACK_PER_USER = 5;
+
 export async function submitFeedback(uid: string, message: string): Promise<void> {
   await addDoc(collection(db, 'feedback'), {
     uid,
@@ -28,6 +34,12 @@ export async function submitFeedback(uid: string, message: string): Promise<void
     createdAt: serverTimestamp(),
     score: 0,
   });
+}
+
+export async function countActiveFeedback(uid: string): Promise<number> {
+  const activeQuery = query(collection(db, 'feedback'), where('uid', '==', uid));
+  const snapshot = await getDocs(activeQuery);
+  return snapshot.size;
 }
 
 /** Tri par score decroissant - un commentaire vote +1 par des moderateurs

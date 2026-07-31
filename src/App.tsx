@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AppSidebar, type SidebarDestination } from './components/AppSidebar';
 import { DiscoveryView } from './components/DiscoveryView';
 import { FavoritesView } from './components/FavoritesView';
@@ -32,6 +32,7 @@ const DEFAULT_OFF_TRACK_THRESHOLD_METERS = 50;
 
 type ViewMode =
   | 'main'
+  | 'upload'
   | 'my-rides'
   | 'discovery'
   | 'favorites'
@@ -39,26 +40,6 @@ type ViewMode =
   | 'statistics'
   | 'feedback'
   | 'feedback-admin';
-
-const VALID_VIEWS: ViewMode[] = [
-  'main',
-  'my-rides',
-  'discovery',
-  'favorites',
-  'fuel-log',
-  'statistics',
-  'feedback',
-  'feedback-admin',
-];
-
-function isValidView(value: unknown): value is ViewMode {
-  return typeof value === 'string' && (VALID_VIEWS as string[]).includes(value);
-}
-
-interface HistoryState {
-  view: ViewMode;
-  menuOpen: boolean;
-}
 
 const storedOnLoad = loadStoredTrack();
 
@@ -104,48 +85,47 @@ function App() {
     }
   }, [recording.status]);
 
-  /** history.back() : le bouton retour Android/Chrome (pas seulement le bouton
-   * "Retour" interne) fonctionne aussi, puisque chaque vue/menu est une vraie
-   * entree d'historique (voir openMenu/navigateFromMenu). */
+  // Modele plat : un seul niveau d'historique au-dessus de main. On pousse une
+  // entree la premiere fois qu'on quitte main (ouverture du menu) ; naviguer
+  // menu -> vue -> menu -> vue ne pousse rien de plus. Revenir (bouton retour
+  // Android/Chrome, tap en dehors du menu, ou le bouton "Retour" d'une vue)
+  // ramene donc toujours directement a main, quel que soit le nombre de sauts.
+  const awayFromMainRef = useRef(false);
+
+  const resetToMain = useCallback(() => {
+    setView('main');
+    setIsMenuOpen(false);
+    awayFromMainRef.current = false;
+  }, []);
+
+  /** A utiliser pour toute navigation retour initiee par l'utilisateur (bouton
+   * "Retour"/"Fermer", tap hors du menu) : depile la vraie entree d'historique
+   * si on en a pousse une, pour rester en phase avec le bouton retour natif. */
   const closeView = () => {
-    window.history.back();
+    const wasAway = awayFromMainRef.current;
+    resetToMain();
+    if (wasAway) window.history.back();
   };
 
-  /** Le menu est un calque independant de la vue (accessible depuis n'importe
-   * quelle page), pas une vue a part entiere - sinon le contenu affiche derriere
-   * le calque change (retombe sur l'ecran principal) au lieu de rester celui d'ou
-   * on vient. */
   const openMenu = () => {
-    window.history.pushState({ view, menuOpen: true } satisfies HistoryState, '');
+    if (!awayFromMainRef.current) {
+      window.history.pushState({}, '');
+      awayFromMainRef.current = true;
+    }
     setIsMenuOpen(true);
   };
 
-  const closeMenu = () => {
-    window.history.back();
-  };
-
-  /** Depuis le menu, remplace l'entree d'historique plutot que d'empiler : le
-   * retour depuis la destination va directement a la page d'ou le menu a ete
-   * ouvert, pas au menu lui-meme. */
   const navigateFromMenu = (destination: SidebarDestination) => {
-    window.history.replaceState({ view: destination, menuOpen: false } satisfies HistoryState, '');
     setView(destination);
     setIsMenuOpen(false);
   };
 
   useEffect(() => {
-    const handlePopState = (event: PopStateEvent) => {
-      // event.state peut venir d'une entree d'historique posee par une version
-      // precedente de l'app (schema different, valeur de view disparue) - jamais
-      // fait confiance aveuglement, sous peine d'ecran vide si la valeur ne
-      // correspond plus a aucune vue connue.
-      const state = event.state as Partial<HistoryState> | undefined;
-      setView(isValidView(state?.view) ? state.view : 'main');
-      setIsMenuOpen(state?.menuOpen ?? false);
-    };
-    window.addEventListener('popstate', handlePopState);
-    return () => window.removeEventListener('popstate', handlePopState);
-  }, []);
+    // Le pop a deja eu lieu (geste utilisateur ou bouton retour natif) : on ne
+    // fait que resynchroniser l'etat React, jamais un second history.back().
+    window.addEventListener('popstate', resetToMain);
+    return () => window.removeEventListener('popstate', resetToMain);
+  }, [resetToMain]);
 
   // Filet de sécurité : si on se déconnecte (ou revient via l'historique) alors
   // qu'on est sur une vue qui nécessite un compte, on ne doit jamais rester bloqué
@@ -284,7 +264,7 @@ function App() {
 
   const handleSignOut = () => {
     auth.signOutUser();
-    setView('main');
+    closeView();
   };
 
   const handleLoadRide = (ride: Ride) => {
@@ -342,21 +322,20 @@ function App() {
 
       {saveSuccessMessage && <div className="banner banner-success">{saveSuccessMessage}</div>}
 
-      {isMenuOpen && (
-        <AppSidebar
-          user={auth.user}
-          isLoading={auth.isLoading}
-          pseudo={profile.pseudo}
-          settings={settings}
-          canModerate={canModerate(role.type)}
-          onSignIn={auth.signInWithGoogle}
-          onSignOut={handleSignOut}
-          onUpdatePseudo={profile.updatePseudo}
-          onUpdateSettings={updateSettings}
-          onNavigate={navigateFromMenu}
-          onClose={closeMenu}
-        />
-      )}
+      <AppSidebar
+        isOpen={isMenuOpen}
+        user={auth.user}
+        isLoading={auth.isLoading}
+        pseudo={profile.pseudo}
+        settings={settings}
+        canModerate={canModerate(role.type)}
+        onSignIn={auth.signInWithGoogle}
+        onSignOut={handleSignOut}
+        onUpdatePseudo={profile.updatePseudo}
+        onUpdateSettings={updateSettings}
+        onNavigate={navigateFromMenu}
+        onClose={closeView}
+      />
 
       {view === 'discovery' && (
         <DiscoveryView
@@ -416,10 +395,28 @@ function App() {
         />
       )}
 
+      {view === 'upload' && (
+        <main className="upload-screen">
+          <div className="my-rides-header">
+            <h2>Charger un GPX</h2>
+            <button type="button" className="button button-ghost" onClick={closeView}>
+              Retour
+            </button>
+          </div>
+          <p>Chargez un fichier GPX pour afficher son tracé et suivre votre position en direct.</p>
+          <GpxUploader
+            onParsed={(result) => {
+              handleParsed(result);
+              closeView();
+            }}
+            onError={setUploadError}
+          />
+        </main>
+      )}
+
       {view === 'main' && !track && !isRecordingActive && (
         <main className="upload-screen">
-          <p>Chargez un fichier GPX pour afficher son tracé et suivre votre position en direct.</p>
-          <GpxUploader onParsed={handleParsed} onError={setUploadError} />
+          <p>Ouvre le menu pour charger un fichier GPX ou démarrer un nouveau parcours.</p>
         </main>
       )}
 

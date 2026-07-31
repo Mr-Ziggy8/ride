@@ -6,7 +6,7 @@ Live at: https://ride-lyart.vercel.app
 
 ## Stack
 
-- Vite + React 18 + TypeScript
+- Vite + React 19 + TypeScript
 - Leaflet / react-leaflet for the map (CARTO raster tiles)
 - Firebase (Auth, Firestore) for accounts, cloud rides, roles, moderation
 - `@tmcw/togeojson` for GPX → GeoJSON parsing
