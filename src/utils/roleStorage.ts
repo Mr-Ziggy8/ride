@@ -25,3 +25,9 @@ export function canAccessPremium(roleType: UserRoleType): boolean {
 export function canModerate(roleType: UserRoleType): boolean {
   return roleType === 'moderator' || roleType === 'admin';
 }
+
+/** Gestion des roles (promouvoir/retrograder d'autres comptes) reservee a
+ * Admin - distinct de canModerate, qui couvre aussi Moderator. */
+export function isAdmin(roleType: UserRoleType): boolean {
+  return roleType === 'admin';
+}

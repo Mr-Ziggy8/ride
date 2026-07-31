@@ -1,9 +1,9 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { FieldValue } from 'firebase-admin/firestore';
 import { getAdminAuth, getAdminDb } from './_lib/firebaseAdmin.js';
+import { ALREADY_AT_LEAST_PAID, type RoleType } from './_lib/roles.js';
 
 const CODE_PATTERN = /^[A-Z0-9_-]{1,40}$/;
-const ALREADY_AT_LEAST_PAID = new Set(['paid', 'moderator', 'admin']);
 
 async function resolveUid(req: VercelRequest): Promise<string> {
   const authHeader = req.headers.authorization;
@@ -66,20 +66,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (redeemedByUids.length >= maxRedemptions) return 'cap_reached' as const;
 
       const roleSnap = await transaction.get(roleRef);
-      const currentType = roleSnap.exists ? (roleSnap.data()?.type as string | undefined) : undefined;
+      const currentType = roleSnap.exists ? (roleSnap.data()?.type as RoleType | undefined) : undefined;
 
       transaction.update(codeRef, { redeemedByUids: FieldValue.arrayUnion(uid) });
 
-      // Meme regle de non-retrogradation que grantPaidRoleUnlessAlreadyHigher
-      // (api/_lib/roles.ts) - dupliquee ici plutot que reutilisee car elle
-      // doit s'executer DANS cette transaction (Firestore interdit de melanger
-      // une transaction externe avec des lectures/ecritures independantes).
+      // Meme logique (et meme provenance paidVia/paidAt permanente) que
+      // grantPaidRoleUnlessAlreadyHigher (api/_lib/roles.ts) - dupliquee ici
+      // plutot que reutilisee car elle doit s'executer DANS cette transaction
+      // (Firestore interdit de melanger une transaction externe avec des
+      // lectures/ecritures independantes).
       if (!currentType || !ALREADY_AT_LEAST_PAID.has(currentType)) {
-        transaction.set(roleRef, {
-          type: 'paid',
-          grantedAt: FieldValue.serverTimestamp(),
-          grantedVia: 'promo_code',
-        });
+        transaction.set(
+          roleRef,
+          {
+            type: 'paid',
+            grantedAt: FieldValue.serverTimestamp(),
+            grantedVia: 'promo_code',
+            paidVia: 'promo_code',
+            paidAt: FieldValue.serverTimestamp(),
+          },
+          { merge: true },
+        );
       }
 
       return 'ok' as const;

@@ -919,6 +919,36 @@ h1 {
   max-width: 420px;
 }
 
+.admin-user-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+
+.admin-user-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1 1 160px;
+  min-width: 120px;
+}
+
+.role-select {
+  font: inherit;
+  font-size: 14px;
+  color: var(--text);
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 8px;
+}
+
 .sidebar-release-note {
   font-size: 11px;
   color: var(--text-dim);

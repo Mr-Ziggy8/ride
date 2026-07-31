@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { AdminRolesView } from './components/AdminRolesView';
 import { AppSidebar, type SidebarDestination } from './components/AppSidebar';
 import { DiscoveryView } from './components/DiscoveryView';
 import { FavoritesView } from './components/FavoritesView';
@@ -22,7 +23,7 @@ import { useRouteRecording } from './hooks/useRouteRecording';
 import { useSettings } from './hooks/useSettings';
 import { useUserRole } from './hooks/useUserRole';
 import { useWakeLock } from './hooks/useWakeLock';
-import { canAccessPremium, canModerate } from './utils/roleStorage';
+import { canAccessPremium, canModerate, isAdmin } from './utils/roleStorage';
 import { computePaceEstimate, projectPosition } from './utils/trackMath';
 import { clearStoredTrack, loadStoredTrack, storeTrack } from './utils/trackStorage';
 import { recordRideFollow, saveRecordedRide, saveRide, toTrackData } from './utils/rideStorage';
@@ -40,7 +41,8 @@ type ViewMode =
   | 'fuel-log'
   | 'statistics'
   | 'feedback'
-  | 'feedback-admin';
+  | 'feedback-admin'
+  | 'admin-roles';
 
 const storedOnLoad = loadStoredTrack();
 
@@ -130,8 +132,8 @@ function App() {
 
   // Filet de sécurité : si on se déconnecte (ou revient via l'historique) alors
   // qu'on est sur une vue qui nécessite un compte, on ne doit jamais rester bloqué
-  // sur un écran vide. Pareil si le rôle ne permet plus la modération (accès
-  // perdu entre-temps) alors qu'on est sur la vue Feedbacks.
+  // sur un écran vide. Pareil si le rôle ne permet plus la modération/l'admin
+  // (accès perdu entre-temps) alors qu'on est sur Feedbacks/Gestion des rôles.
   useEffect(() => {
     const requiresAccount =
       view === 'my-rides' ||
@@ -139,12 +141,16 @@ function App() {
       view === 'fuel-log' ||
       view === 'statistics' ||
       view === 'feedback' ||
-      view === 'feedback-admin';
+      view === 'feedback-admin' ||
+      view === 'admin-roles';
     if (!auth.user && requiresAccount) {
       setView('main');
       return;
     }
     if (view === 'feedback-admin' && !canModerate(role.type)) {
+      setView('main');
+    }
+    if (view === 'admin-roles' && !isAdmin(role.type)) {
       setView('main');
     }
   }, [auth.user, view, role.type]);
@@ -330,6 +336,7 @@ function App() {
         pseudo={profile.pseudo}
         settings={settings}
         canModerate={canModerate(role.type)}
+        isAdmin={isAdmin(role.type)}
         onSignIn={auth.signInWithGoogle}
         onSignOut={handleSignOut}
         onUpdatePseudo={profile.updatePseudo}
@@ -387,6 +394,10 @@ function App() {
 
       {view === 'feedback-admin' && auth.user && canModerate(role.type) && (
         <FeedbackAdminView user={auth.user} onClose={closeView} />
+      )}
+
+      {view === 'admin-roles' && auth.user && isAdmin(role.type) && (
+        <AdminRolesView user={auth.user} onClose={closeView} />
       )}
 
       {view === 'main' && isRecordingActive && (

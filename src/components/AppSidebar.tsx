@@ -12,7 +12,8 @@ export type SidebarDestination =
   | 'fuel-log'
   | 'statistics'
   | 'feedback'
-  | 'feedback-admin';
+  | 'feedback-admin'
+  | 'admin-roles';
 
 interface AppSidebarProps {
   isOpen: boolean;
@@ -21,6 +22,7 @@ interface AppSidebarProps {
   pseudo: string | null;
   settings: Settings;
   canModerate: boolean;
+  isAdmin: boolean;
   onSignIn: () => void;
   onSignOut: () => void;
   onUpdatePseudo: (pseudo: string) => void;
@@ -36,6 +38,7 @@ export function AppSidebar({
   pseudo,
   settings,
   canModerate,
+  isAdmin,
   onSignIn,
   onSignOut,
   onUpdatePseudo,
@@ -136,6 +139,11 @@ export function AppSidebar({
           {user && canModerate && (
             <button type="button" className="button button-ghost" onClick={() => onNavigate('feedback-admin')}>
               Feedbacks
+            </button>
+          )}
+          {user && isAdmin && (
+            <button type="button" className="button button-ghost" onClick={() => onNavigate('admin-roles')}>
+              Gestion des rôles
             </button>
           )}
         </nav>
