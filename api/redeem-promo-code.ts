@@ -49,23 +49,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const codeRef = db.collection('promoCodes').doc(code);
     const roleRef = db.collection('roles').doc(uid);
 
-    // Transaction : code deja utilise + role deja premium sont verifies ET
-    // ecrits en une seule operation atomique. Sans ca, deux redemptions
-    // simultanees du meme code pourraient toutes les deux passer le check
-    // "pas encore utilise" avant qu'aucune n'ait ecrit - le meme code serait
-    // consomme deux fois par deux comptes differents.
+    // Transaction : cap/deja-utilise-par-cet-utilisateur + role premium sont
+    // verifies ET ecrits en une seule operation atomique. Sans ca, deux
+    // redemptions simultanees pourraient toutes les deux passer le check de
+    // cap avant qu'aucune n'ait ecrit - le code serait accorde a plus
+    // d'utilisateurs que sa limite (maxRedemptions).
     const outcome = await db.runTransaction(async (transaction) => {
       const codeSnap = await transaction.get(codeRef);
       if (!codeSnap.exists) return 'not_found' as const;
-      if (codeSnap.data()?.redeemedByUid) return 'already_redeemed' as const;
+
+      const codeData = codeSnap.data();
+      const redeemedByUids: string[] = codeData?.redeemedByUids ?? [];
+      const maxRedemptions: number = codeData?.maxRedemptions ?? 1;
+
+      if (redeemedByUids.includes(uid)) return 'already_redeemed' as const;
+      if (redeemedByUids.length >= maxRedemptions) return 'cap_reached' as const;
 
       const roleSnap = await transaction.get(roleRef);
       const currentType = roleSnap.exists ? (roleSnap.data()?.type as string | undefined) : undefined;
 
-      transaction.update(codeRef, {
-        redeemedByUid: uid,
-        redeemedAt: FieldValue.serverTimestamp(),
-      });
+      transaction.update(codeRef, { redeemedByUids: FieldValue.arrayUnion(uid) });
 
       // Meme regle de non-retrogradation que grantPaidRoleUnlessAlreadyHigher
       // (api/_lib/roles.ts) - dupliquee ici plutot que reutilisee car elle
@@ -88,6 +91,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
     if (outcome === 'already_redeemed') {
       res.status(409).json({ error: 'already_redeemed' });
+      return;
+    }
+    if (outcome === 'cap_reached') {
+      res.status(409).json({ error: 'cap_reached' });
       return;
     }
 

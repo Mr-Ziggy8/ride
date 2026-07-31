@@ -13,7 +13,8 @@ interface RedeemErrorBody {
 
 const PROMO_ERROR_MESSAGES: Record<string, string> = {
   code_not_found: 'Code invalide.',
-  already_redeemed: 'Ce code a déjà été utilisé.',
+  already_redeemed: 'Tu as déjà utilisé ce code.',
+  cap_reached: "Ce code a atteint sa limite d'utilisations.",
   invalid_code_format: 'Format de code invalide.',
 };
 
