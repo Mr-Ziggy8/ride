@@ -19,7 +19,7 @@ import {
 import { db } from '../lib/firebase';
 import { reverseGeocodeRegion } from './geocoding';
 import { buildElevationProfile, hasElevationData } from './gpxParser';
-import { computeBounds, simplifyForDisplay } from './trackMath';
+import { computeBounds, simplifyForDisplay, splitOnGaps } from './trackMath';
 import type { Ride, RideVisibility, RecordingStats, StoredTrackPoint, TrackData } from '../types';
 
 /**
@@ -32,6 +32,24 @@ function toStoredTrackPoints(line: GeoJSON.Feature<GeoJSON.LineString>): StoredT
     lat,
     ele: ele ?? null,
   }));
+}
+
+/**
+ * Simplifie chaque segment GPS (cf. splitOnGaps) independamment plutot que le trace entier,
+ * pour eviter que l'algorithme de simplification ne lisse par-dessus une coupure (ecran
+ * verrouille...) - puis remet le marqueur de coupure sur le premier point survivant de chaque
+ * segment, perdu par l'aller-retour via une LineString GeoJSON (pas de champ par-point).
+ */
+function simplifyPreservingGaps(points: StoredTrackPoint[]): StoredTrackPoint[] {
+  return splitOnGaps(points).flatMap((segment, index) => {
+    const coordinates: GeoJSON.Position[] = segment.map((p) => (p.ele !== null ? [p.lng, p.lat, p.ele] : [p.lng, p.lat]));
+    const line: GeoJSON.Feature<GeoJSON.LineString> = { type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates } };
+    const simplified = toStoredTrackPoints(simplifyForDisplay(line));
+    if (index > 0 && simplified.length > 0) {
+      simplified[0] = { ...simplified[0], gap: true };
+    }
+    return simplified;
+  });
 }
 
 /** Pseudo public choisi par l'utilisateur (users/{uid}.pseudo), sinon le nom du
@@ -95,13 +113,6 @@ export async function saveRecordedRide(
   const centerLat = (bounds[1] + bounds[3]) / 2;
   const regionLabel = await reverseGeocodeRegion(centerLat, centerLng);
 
-  const coordinates: GeoJSON.Position[] = points.map((p) => (p.ele !== null ? [p.lng, p.lat, p.ele] : [p.lng, p.lat]));
-  const line: GeoJSON.Feature<GeoJSON.LineString> = {
-    type: 'Feature',
-    properties: {},
-    geometry: { type: 'LineString', coordinates },
-  };
-
   const docRef = await addDoc(collection(db, 'rides'), {
     ownerId: user.uid,
     ownerDisplayName: resolveOwnerDisplayName(user, pseudo),
@@ -116,7 +127,7 @@ export async function saveRecordedRide(
     elevationGainMeters: stats.elevationGainMeters,
     maxSpeedMetersPerSecond: stats.maxSpeedMetersPerSecond,
     avgSpeedMetersPerSecond: stats.avgSpeedMetersPerSecond,
-    trackPoints: toStoredTrackPoints(simplifyForDisplay(line)),
+    trackPoints: simplifyPreservingGaps(points),
     bounds,
     regionLabel,
     country,
@@ -211,11 +222,13 @@ export async function deleteRide(rideId: string): Promise<void> {
   await deleteDoc(doc(db, 'rides', rideId));
 }
 
+function toPosition(p: StoredTrackPoint): GeoJSON.Position {
+  return p.ele !== null ? [p.lng, p.lat, p.ele] : [p.lng, p.lat];
+}
+
 /** Inverse de toStoredTrackPoints - reconstruit un TrackData affichable/suivable depuis un Ride. */
 export function toTrackData(ride: Ride): TrackData {
-  const positions: GeoJSON.Position[] = ride.trackPoints.map((p) =>
-    p.ele !== null ? [p.lng, p.lat, p.ele] : [p.lng, p.lat],
-  );
+  const positions = ride.trackPoints.map(toPosition);
   const hasElevation = hasElevationData(positions);
 
   return {
@@ -228,5 +241,6 @@ export function toTrackData(ride: Ride): TrackData {
     hasElevation,
     elevationProfile: hasElevation ? buildElevationProfile(positions) : null,
     bounds: ride.bounds,
+    segments: splitOnGaps(ride.trackPoints).map((segment) => segment.map(toPosition)),
   };
 }

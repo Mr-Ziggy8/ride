@@ -268,7 +268,7 @@ function App() {
     region: string | null,
   ) => {
     if (!auth.user) return;
-    const storedPoints = recording.points.map(({ lng, lat, ele }) => ({ lng, lat, ele }));
+    const storedPoints = recording.points.map(({ lng, lat, ele, gap }) => ({ lng, lat, ele, gap }));
     await saveRecordedRide(auth.user, storedPoints, recording.stats, title, visibility, profile.pseudo, country, region);
     recording.discard();
     setSaveSuccessMessage('Parcours enregistré et sauvegardé.');

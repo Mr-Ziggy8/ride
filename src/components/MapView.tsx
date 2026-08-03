@@ -33,6 +33,11 @@ function toLatLngTuples(coordinates: GeoJSON.Position[]): LatLngTuple[] {
   return coordinates.map(([lng, lat]) => [lat, lng]);
 }
 
+function simplifyCoordinates(coordinates: GeoJSON.Position[]): GeoJSON.Position[] {
+  return simplifyForDisplay({ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates } })
+    .geometry.coordinates;
+}
+
 function toLatLngBounds([minLng, minLat, maxLng, maxLat]: TrackData['bounds']): LatLngBoundsLiteral {
   return [
     [minLat, minLng],
@@ -85,10 +90,12 @@ export interface MapViewProps {
 
 export function MapView({ track, livePosition, projected, isOffTrack }: MapViewProps) {
   const [isFollowing, setIsFollowing] = useState(true);
-  const positions = useMemo(
-    () => toLatLngTuples(simplifyForDisplay(track.geojson).geometry.coordinates),
-    [track],
-  );
+  // Rendu par segments (cf. TrackData.segments) : un trou GPS demarre un nouveau
+  // segment au lieu d'etre relie par un trait continu ("ligne droite" ecran verrouille).
+  const segments = useMemo(() => {
+    const raw = track.segments ?? [track.geojson.geometry.coordinates];
+    return raw.map((coordinates) => toLatLngTuples(simplifyCoordinates(coordinates)));
+  }, [track]);
   const bounds = useMemo(() => toLatLngBounds(track.bounds), [track]);
 
   return (
@@ -101,7 +108,7 @@ export function MapView({ track, livePosition, projected, isOffTrack }: MapViewP
           onUserPanned={() => setIsFollowing(false)}
         />
         <TileLayer url={TILE_URL} attribution={TILE_ATTRIBUTION} detectRetina />
-        <Polyline positions={positions} pathOptions={{ color: '#2563eb', weight: 4 }} />
+        <Polyline positions={segments} pathOptions={{ color: '#2563eb', weight: 4 }} />
         {livePosition && (
           <Marker
             position={[livePosition.lat, livePosition.lng]}

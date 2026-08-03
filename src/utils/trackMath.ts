@@ -9,6 +9,20 @@ export function computeTotalDistanceMeters(
   return length(line, { units: 'meters' });
 }
 
+/** Splits a point list into contiguous runs, starting a new run at each `gap` point
+ * (cf. RecordedTrackPoint.gap) instead of connecting across a GPS dead zone. */
+export function splitOnGaps<T extends { gap?: boolean }>(points: T[]): T[][] {
+  const segments: T[][] = [];
+  for (const point of points) {
+    if (point.gap || segments.length === 0) {
+      segments.push([point]);
+    } else {
+      segments[segments.length - 1].push(point);
+    }
+  }
+  return segments;
+}
+
 export function computeBounds(
   coordinates: GeoJSON.Position[],
 ): [number, number, number, number] {
@@ -113,7 +127,8 @@ export function buildThumbnailPath(
     .map((p, i) => {
       const x = offsetX + (p.lng - minLng) * scale;
       const y = offsetY + (maxLat - p.lat) * scale; // lat croit vers le nord, y SVG croit vers le bas
-      return `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`;
+      const isNewSegment = i === 0 || p.gap; // gap GPS : nouveau sous-trace au lieu d'un trait continu
+      return `${isNewSegment ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`;
     })
     .join(' ');
 }

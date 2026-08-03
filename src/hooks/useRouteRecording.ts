@@ -9,6 +9,10 @@ import type { LivePosition, RecordedTrackPoint, RecordingStats, RecordingStatus 
 // pour couper les courbes en ligne droite au lieu de suivre la route.
 const MIN_SAMPLE_INTERVAL_MS = 3000;
 const MIN_SAMPLE_DISTANCE_METERS = 5;
+// Un fix normal arrive au moins toutes les ~10s (timeout watchPosition, cf. useGeolocation) meme
+// immobile. Un ecart plus grand ne peut venir que d'une coupure reelle (ecran verrouille, app en
+// arriere-plan) : on marque un nouveau segment au lieu de relier tout droit par-dessus le trou.
+const MAX_NORMAL_GAP_MS = 20000;
 
 export interface UseRouteRecordingResult {
   status: RecordingStatus;
@@ -24,6 +28,7 @@ export interface UseRouteRecordingResult {
 function sumDistanceMeters(points: RecordedTrackPoint[]): number {
   let total = 0;
   for (let i = 1; i < points.length; i++) {
+    if (points[i].gap) continue; // coupure GPS : pas de deplacement reel entre ces deux points
     total += distance([points[i - 1].lng, points[i - 1].lat], [points[i].lng, points[i].lat], { units: 'meters' });
   }
   return total;
@@ -33,6 +38,7 @@ function sumElevationGainMeters(points: RecordedTrackPoint[]): number | null {
   if (points.length < 2 || !points.every((p) => p.ele !== null)) return null;
   let gain = 0;
   for (let i = 1; i < points.length; i++) {
+    if (points[i].gap) continue;
     const delta = (points[i].ele as number) - (points[i - 1].ele as number);
     if (delta > 0) gain += delta;
   }
@@ -83,16 +89,18 @@ export function useRouteRecording(): UseRouteRecordingResult {
 
     setPoints((prev) => {
       const last = prev[prev.length - 1];
+      let gap = false;
       if (last) {
         const elapsedMs = position.timestampMs - last.timestampMs;
+        gap = elapsedMs > MAX_NORMAL_GAP_MS;
         const movedMeters = distance([last.lng, last.lat], [position.lng, position.lat], { units: 'meters' });
-        if (elapsedMs < MIN_SAMPLE_INTERVAL_MS && movedMeters < MIN_SAMPLE_DISTANCE_METERS) {
+        if (!gap && elapsedMs < MIN_SAMPLE_INTERVAL_MS && movedMeters < MIN_SAMPLE_DISTANCE_METERS) {
           return prev;
         }
       }
       const next: RecordedTrackPoint[] = [
         ...prev,
-        { lng: position.lng, lat: position.lat, ele: position.altitudeMeters, timestampMs: position.timestampMs },
+        { lng: position.lng, lat: position.lat, ele: position.altitudeMeters, timestampMs: position.timestampMs, gap },
       ];
       if (startedAtMsRef.current !== null) {
         storeStoredRecording({ points: next, startedAtMs: startedAtMsRef.current });

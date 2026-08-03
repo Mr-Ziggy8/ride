@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { MapView } from './MapView';
-import { computeBounds } from '../utils/trackMath';
+import { computeBounds, splitOnGaps } from '../utils/trackMath';
 import { formatDistance, formatDuration, formatSpeed } from '../utils/units';
 import type { LivePosition, RecordedTrackPoint, RecordingStats, TrackData, UnitSystem } from '../types';
 
@@ -13,15 +13,21 @@ interface RecordingScreenProps {
   onFinish: () => void;
 }
 
+function toPosition(p: RecordedTrackPoint): GeoJSON.Position {
+  return p.ele !== null ? [p.lng, p.lat, p.ele] : [p.lng, p.lat];
+}
+
 function buildLiveTrack(points: RecordedTrackPoint[], distanceMeters: number): TrackData | null {
   if (points.length < 2) return null;
-  const coordinates: GeoJSON.Position[] = points.map((p) => (p.ele !== null ? [p.lng, p.lat, p.ele] : [p.lng, p.lat]));
+  const coordinates = points.map(toPosition);
+  const segments = splitOnGaps(points).map((segment) => segment.map(toPosition));
   return {
     geojson: { type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates } },
     totalDistanceMeters: distanceMeters,
     hasElevation: false,
     elevationProfile: null,
     bounds: computeBounds(coordinates),
+    segments,
   };
 }
 

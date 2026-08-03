@@ -9,6 +9,10 @@ export interface TrackData {
   hasElevation: boolean;
   elevationProfile: ElevationPoint[] | null;
   bounds: [number, number, number, number];
+  /** Coordinates split at GPS gaps (screen lock, backgrounding...) so the map draws
+   * disconnected strokes instead of a straight line across the dead zone. Falls back
+   * to a single segment (geojson.geometry.coordinates) when absent/not applicable. */
+  segments?: GeoJSON.Position[][];
 }
 
 export interface LivePosition {
@@ -55,6 +59,8 @@ export interface StoredTrackPoint {
   lng: number;
   lat: number;
   ele: number | null;
+  /** true si une coupure GPS a ete detectee juste avant ce point (cf. RecordedTrackPoint.gap). */
+  gap?: boolean;
 }
 
 export type RideVisibility = 'public' | 'private';
@@ -86,6 +92,10 @@ export interface RecordedTrackPoint {
   lat: number;
   ele: number | null;
   timestampMs: number;
+  /** true si le fix precedent date de plus de MAX_NORMAL_GAP_MS (ecran verrouille,
+   * app en arriere-plan...) - marque le debut d'un nouveau segment plutot que de
+   * relier tout droit par-dessus la zone non trackee. */
+  gap?: boolean;
 }
 
 export type RecordingStatus = 'idle' | 'recording' | 'finished_pending_save';

@@ -1,3 +1,4 @@
+import { splitOnGaps } from './trackMath';
 import type { Ride } from '../types';
 
 function escapeXml(value: string): string {
@@ -20,21 +21,24 @@ function sanitizeFilename(title: string): string {
  * simple liste de points d'etape) - pas de choix propose a l'utilisateur.
  */
 export function buildGpxString(ride: Ride): string {
-  const trackPoints = ride.trackPoints
-    .map((p) =>
-      p.ele !== null
-        ? `      <trkpt lat="${p.lat}" lon="${p.lng}"><ele>${p.ele}</ele></trkpt>`
-        : `      <trkpt lat="${p.lat}" lon="${p.lng}"></trkpt>`,
-    )
+  const trackSegments = splitOnGaps(ride.trackPoints)
+    .map((segment) => {
+      const trackPoints = segment
+        .map((p) =>
+          p.ele !== null
+            ? `      <trkpt lat="${p.lat}" lon="${p.lng}"><ele>${p.ele}</ele></trkpt>`
+            : `      <trkpt lat="${p.lat}" lon="${p.lng}"></trkpt>`,
+        )
+        .join('\n');
+      return `    <trkseg>\n${trackPoints}\n    </trkseg>`;
+    })
     .join('\n');
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <gpx version="1.1" creator="GPX Live Tracker" xmlns="http://www.topografix.com/GPX/1/1">
   <trk>
     <name>${escapeXml(ride.title)}</name>
-    <trkseg>
-${trackPoints}
-    </trkseg>
+${trackSegments}
   </trk>
 </gpx>
 `;
