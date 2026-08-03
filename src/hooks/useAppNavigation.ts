@@ -13,7 +13,8 @@ export type ViewMode =
   | 'badges'
   | 'feedback'
   | 'feedback-admin'
-  | 'admin-roles';
+  | 'admin-roles'
+  | 'admin-promo-codes';
 
 export interface UseAppNavigationResult {
   view: ViewMode;

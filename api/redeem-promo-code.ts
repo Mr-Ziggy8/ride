@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { FieldValue } from 'firebase-admin/firestore';
+import { FieldValue, type Timestamp } from 'firebase-admin/firestore';
 import { getAdminAuth, getAdminDb } from './_lib/firebaseAdmin.js';
 import { ALREADY_AT_LEAST_PAID, type RoleType } from './_lib/roles.js';
 
@@ -61,7 +61,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const codeData = codeSnap.data();
       const redeemedByUids: string[] = codeData?.redeemedByUids ?? [];
       const maxRedemptions: number = codeData?.maxRedemptions ?? 1;
+      // isActive absent == true (codes crees avant l'ajout du toggle admin).
+      const isActive: boolean = codeData?.isActive ?? true;
+      const expiresAt = codeData?.expiresAt as Timestamp | undefined;
 
+      if (!isActive) return 'inactive' as const;
+      if (expiresAt && expiresAt.toMillis() < Date.now()) return 'expired' as const;
       if (redeemedByUids.includes(uid)) return 'already_redeemed' as const;
       if (redeemedByUids.length >= maxRedemptions) return 'cap_reached' as const;
 
@@ -94,6 +99,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (outcome === 'not_found') {
       res.status(404).json({ error: 'code_not_found' });
+      return;
+    }
+    if (outcome === 'inactive') {
+      res.status(409).json({ error: 'code_inactive' });
+      return;
+    }
+    if (outcome === 'expired') {
+      res.status(409).json({ error: 'code_expired' });
       return;
     }
     if (outcome === 'already_redeemed') {

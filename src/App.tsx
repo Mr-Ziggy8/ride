@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AdminRolesView } from './components/AdminRolesView';
+import { AdminPromoCodesView } from './components/AdminPromoCodesView';
 import { AppSidebar } from './components/AppSidebar';
 import { DiscoveryView } from './components/DiscoveryView';
 import { FavoritesView } from './components/FavoritesView';
@@ -95,7 +96,8 @@ function App() {
       view === 'badges' ||
       view === 'feedback' ||
       view === 'feedback-admin' ||
-      view === 'admin-roles';
+      view === 'admin-roles' ||
+      view === 'admin-promo-codes';
     if (!auth.user && requiresAccount) {
       setView('main');
       return;
@@ -103,7 +105,7 @@ function App() {
     if (view === 'feedback-admin' && !userCanModerate) {
       setView('main');
     }
-    if (view === 'admin-roles' && !userIsAdmin) {
+    if ((view === 'admin-roles' || view === 'admin-promo-codes') && !userIsAdmin) {
       setView('main');
     }
   }, [auth.user, view, setView, userCanModerate, userIsAdmin]);
@@ -379,6 +381,10 @@ function App() {
 
       {view === 'admin-roles' && auth.user && userIsAdmin && (
         <AdminRolesView user={auth.user} onClose={closeView} />
+      )}
+
+      {view === 'admin-promo-codes' && auth.user && userIsAdmin && (
+        <AdminPromoCodesView user={auth.user} onClose={closeView} />
       )}
 
       {view === 'main' && isRecordingActive && (

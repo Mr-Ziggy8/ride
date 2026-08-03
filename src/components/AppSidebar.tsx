@@ -15,7 +15,8 @@ export type SidebarDestination =
   | 'badges'
   | 'feedback'
   | 'feedback-admin'
-  | 'admin-roles';
+  | 'admin-roles'
+  | 'admin-promo-codes';
 
 interface AppSidebarProps {
   isOpen: boolean;
@@ -173,6 +174,11 @@ export function AppSidebar({
           {user && isAdmin && settings.adminOptionsEnabled && (
             <button type="button" className="button button-ghost" onClick={() => onNavigate('admin-roles')}>
               Gestion des rôles
+            </button>
+          )}
+          {user && isAdmin && settings.adminOptionsEnabled && (
+            <button type="button" className="button button-ghost" onClick={() => onNavigate('admin-promo-codes')}>
+              Gestion codes promo
             </button>
           )}
         </nav>
