@@ -16,12 +16,14 @@ import type { Ride, UnitSystem } from '../types';
 interface DiscoveryViewProps {
   user: User | null;
   unitSystem: UnitSystem;
-  canModerate: boolean;
+  /** Modo/admin avec "Options modo" active dans la sidebar - affiche Renommer/Supprimer
+   * sur les parcours d'autrui. Masque par defaut pour ne pas polluer l'usage classique. */
+  showModTools: boolean;
   onLoadRide: (ride: Ride) => void;
   onClose: () => void;
 }
 
-export function DiscoveryView({ user, unitSystem, canModerate, onLoadRide, onClose }: DiscoveryViewProps) {
+export function DiscoveryView({ user, unitSystem, showModTools, onLoadRide, onClose }: DiscoveryViewProps) {
   const { rides, isLoading, error, refresh } = usePublicRides();
   const { favoriteIds, isPending, toggleFavorite } = useFavoriteToggle(user);
   const [renamingRide, setRenamingRide] = useState<Ride | null>(null);
@@ -82,7 +84,7 @@ export function DiscoveryView({ user, unitSystem, canModerate, onLoadRide, onClo
               Suivre
             </button>
             <DownloadGpxButton ride={ride} user={user} />
-            {canModerate && (
+            {showModTools && (
               <>
                 <button type="button" className="button button-ghost" onClick={() => setRenamingRide(ride)}>
                   Renommer

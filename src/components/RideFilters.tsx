@@ -1,8 +1,11 @@
 import { useMemo } from 'react';
 import { EU_COUNTRIES_REGIONS } from '../data/euCountriesRegions';
 import { convertDistanceValue, distanceUnitLabel } from '../utils/units';
+import { MultiSelectDropdown } from './MultiSelectDropdown';
 import type { RideFiltersValue } from '../utils/rideFilters';
 import type { Ride, UnitSystem } from '../types';
+
+const ALL_COUNTRIES = EU_COUNTRIES_REGIONS.map((c) => c.country);
 
 interface RideFiltersProps {
   rides: Ride[];
@@ -29,10 +32,7 @@ export function RideFilters({ rides, unitSystem, value, onChange }: RideFiltersP
     return Array.from(set).sort((a, b) => a.localeCompare(b));
   }, [value.countries]);
 
-  const toggleCountry = (country: string) => {
-    const nextCountries = value.countries.includes(country)
-      ? value.countries.filter((c) => c !== country)
-      : [...value.countries, country];
+  const setCountries = (nextCountries: string[]) => {
     const nextRegions = value.regions.filter((region) =>
       nextCountries.some((c) => EU_COUNTRIES_REGIONS.find((entry) => entry.country === c)?.regions.includes(region)),
     );
@@ -76,18 +76,13 @@ export function RideFilters({ rides, unitSystem, value, onChange }: RideFiltersP
 
       <div className="ride-filters-toggles">
         <span className="ride-filters-label">Pays</span>
-        <div className="ride-filters-chips">
-          {EU_COUNTRIES_REGIONS.map((c) => (
-            <button
-              key={c.country}
-              type="button"
-              className={`filter-chip${value.countries.includes(c.country) ? ' filter-chip--active' : ''}`}
-              onClick={() => toggleCountry(c.country)}
-            >
-              {c.country}
-            </button>
-          ))}
-        </div>
+        <MultiSelectDropdown
+          label="Sélectionner des pays"
+          options={ALL_COUNTRIES}
+          selected={value.countries}
+          onChange={setCountries}
+          searchPlaceholder="Rechercher un pays..."
+        />
       </div>
 
       {availableRegions.length > 0 && (

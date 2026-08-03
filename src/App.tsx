@@ -284,6 +284,7 @@ function App() {
         isLoading={auth.isLoading}
         pseudo={profile.pseudo}
         settings={settings}
+        canAccessPremium={userCanAccessPremium}
         canModerate={userCanModerate}
         isAdmin={userIsAdmin}
         onSignIn={auth.signInWithGoogle}
@@ -298,7 +299,7 @@ function App() {
         <DiscoveryView
           user={auth.user}
           unitSystem={settings.unitSystem}
-          canModerate={userCanModerate}
+          showModTools={userCanModerate && settings.modOptionsEnabled}
           onLoadRide={handleLoadRide}
           onClose={closeView}
         />

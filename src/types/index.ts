@@ -121,6 +121,10 @@ export interface Settings {
   fuelUnit: FuelUnit;
   theme: ThemeMode;
   language: Language;
+  /** Modo/admin uniquement : affiche les boutons de moderation en contexte
+   * (Renommer/Supprimer sur les parcours d'autrui dans Decouverte). Off par
+   * defaut pour ne pas polluer l'UI en utilisation classique. */
+  modOptionsEnabled: boolean;
 }
 
 export type UserRoleType = 'free' | 'paid' | 'moderator' | 'admin';

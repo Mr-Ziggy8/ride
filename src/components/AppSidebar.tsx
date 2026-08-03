@@ -21,6 +21,7 @@ interface AppSidebarProps {
   isLoading: boolean;
   pseudo: string | null;
   settings: Settings;
+  canAccessPremium: boolean;
   canModerate: boolean;
   isAdmin: boolean;
   onSignIn: () => void;
@@ -37,6 +38,7 @@ export function AppSidebar({
   isLoading,
   pseudo,
   settings,
+  canAccessPremium,
   canModerate,
   isAdmin,
   onSignIn,
@@ -79,7 +81,22 @@ export function AppSidebar({
         <div className="sidebar-account">
           {user ? (
             <>
-              <span className="auth-status-name">{user.displayName ?? 'Compte'}</span>
+              <span className="auth-status-name">
+                {user.displayName ?? 'Compte'}
+                {isAdmin ? (
+                  <span className="role-badge role-badge--admin" title="Administrateur" aria-label="Administrateur">
+                    👑
+                  </span>
+                ) : canModerate ? (
+                  <span className="role-badge role-badge--moderator" title="Modérateur" aria-label="Modérateur">
+                    🛡️
+                  </span>
+                ) : canAccessPremium ? (
+                  <span className="role-badge role-badge--premium" title="Compte Premium" aria-label="Compte Premium">
+                    ✓
+                  </span>
+                ) : null}
+              </span>
               <label className="dialog-field">
                 Pseudo public (parcours partagés)
                 <input
@@ -147,6 +164,18 @@ export function AppSidebar({
             </button>
           )}
         </nav>
+
+        {user && canModerate && (
+          <div className="sidebar-field">
+            <span className="sidebar-field-title">Options modo</span>
+            <ToggleSwitch
+              checked={settings.modOptionsEnabled}
+              onChange={(enabled) => onUpdateSettings({ modOptionsEnabled: enabled })}
+              leftLabel="Masquées"
+              rightLabel="Visibles"
+            />
+          </div>
+        )}
 
         <div className="sidebar-field">
           <span className="sidebar-field-title">Unité de distance</span>
