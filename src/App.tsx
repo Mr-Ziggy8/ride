@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { AdminRolesView } from './components/AdminRolesView';
-import { AppSidebar, type SidebarDestination } from './components/AppSidebar';
+import { AppSidebar } from './components/AppSidebar';
 import { DiscoveryView } from './components/DiscoveryView';
 import { FavoritesView } from './components/FavoritesView';
 import { FeedbackAdminView } from './components/FeedbackAdminView';
@@ -16,6 +16,7 @@ import { ElevationChart } from './components/ElevationChart';
 import { RecordingScreen } from './components/RecordingScreen';
 import { SaveRideDialog } from './components/SaveRideDialog';
 import { StatisticsView } from './components/StatisticsView';
+import { useAppNavigation } from './hooks/useAppNavigation';
 import { useAuth } from './hooks/useAuth';
 import { useGeolocation } from './hooks/useGeolocation';
 import { useProfile } from './hooks/useProfile';
@@ -32,18 +33,6 @@ import type { Ride, RideVisibility, TrackData } from './types';
 
 const DEFAULT_OFF_TRACK_THRESHOLD_METERS = 50;
 
-type ViewMode =
-  | 'main'
-  | 'upload'
-  | 'my-rides'
-  | 'discovery'
-  | 'favorites'
-  | 'fuel-log'
-  | 'statistics'
-  | 'feedback'
-  | 'feedback-admin'
-  | 'admin-roles';
-
 const storedOnLoad = loadStoredTrack();
 
 function App() {
@@ -55,8 +44,7 @@ function App() {
   );
   const [isSaveDialogOpen, setIsSaveDialogOpen] = useState(false);
   const [saveSuccessMessage, setSaveSuccessMessage] = useState<string | null>(null);
-  const [view, setView] = useState<ViewMode>('main');
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const { view, setView, isMenuOpen, openMenu, closeMenu, closeView, navigateFromMenu } = useAppNavigation();
 
   const auth = useAuth();
   const { settings, updateSettings } = useSettings(auth.user);
@@ -66,6 +54,9 @@ function App() {
   const wakeLock = useWakeLock();
   const recording = useRouteRecording();
   const isRecordingActive = recording.status !== 'idle';
+  const userCanModerate = canModerate(role.type);
+  const userIsAdmin = isAdmin(role.type);
+  const userCanAccessPremium = canAccessPremium(role.type);
 
   // geo/wakeLock/recording sont de nouveaux objets a chaque render (position qui
   // bouge, etc.) - passer par des refs evite de les lister dans les deps des effects
@@ -88,57 +79,6 @@ function App() {
     }
   }, [recording.status]);
 
-  // Modele plat : un seul niveau d'historique au-dessus de main. On pousse une
-  // entree la premiere fois qu'on quitte main (ouverture du menu) ; naviguer
-  // menu -> vue -> menu -> vue ne pousse rien de plus. Revenir (bouton retour
-  // Android/Chrome, tap en dehors du menu, ou le bouton "Retour" d'une vue)
-  // ramene donc toujours directement a main, quel que soit le nombre de sauts.
-  const awayFromMainRef = useRef(false);
-
-  const resetToMain = useCallback(() => {
-    setView('main');
-    setIsMenuOpen(false);
-    awayFromMainRef.current = false;
-  }, []);
-
-  /** A utiliser pour toute navigation retour initiee par l'utilisateur (bouton
-   * "Retour"/"Fermer", tap hors du menu) : depile la vraie entree d'historique
-   * si on en a pousse une, pour rester en phase avec le bouton retour natif. */
-  const closeView = () => {
-    const wasAway = awayFromMainRef.current;
-    resetToMain();
-    if (wasAway) window.history.back();
-  };
-
-  const openMenu = () => {
-    if (!awayFromMainRef.current) {
-      window.history.pushState({}, '');
-      awayFromMainRef.current = true;
-    }
-    setIsMenuOpen(true);
-  };
-
-  const navigateFromMenu = (destination: SidebarDestination) => {
-    setView(destination);
-    setIsMenuOpen(false);
-  };
-
-  /** Fermer le menu (bouton "Fermer" ou tap en dehors) ne touche qu'a l'overlay -
-   * contrairement a closeView (bouton "Retour" d'une vue, ou bouton retour natif),
-   * ca ne ramene JAMAIS a main : ca revele simplement l'ecran deja ouvert avant
-   * l'ouverture du menu (main si on y etait, ou une autre vue si le menu a ete
-   * rouvert par-dessus). */
-  const closeMenu = () => {
-    setIsMenuOpen(false);
-  };
-
-  useEffect(() => {
-    // Le pop a deja eu lieu (geste utilisateur ou bouton retour natif) : on ne
-    // fait que resynchroniser l'etat React, jamais un second history.back().
-    window.addEventListener('popstate', resetToMain);
-    return () => window.removeEventListener('popstate', resetToMain);
-  }, [resetToMain]);
-
   // Filet de sécurité : si on se déconnecte (ou revient via l'historique) alors
   // qu'on est sur une vue qui nécessite un compte, on ne doit jamais rester bloqué
   // sur un écran vide. Pareil si le rôle ne permet plus la modération/l'admin
@@ -156,13 +96,13 @@ function App() {
       setView('main');
       return;
     }
-    if (view === 'feedback-admin' && !canModerate(role.type)) {
+    if (view === 'feedback-admin' && !userCanModerate) {
       setView('main');
     }
-    if (view === 'admin-roles' && !isAdmin(role.type)) {
+    if (view === 'admin-roles' && !userIsAdmin) {
       setView('main');
     }
-  }, [auth.user, view, role.type]);
+  }, [auth.user, view, setView, userCanModerate, userIsAdmin]);
 
   const projected = useMemo(() => {
     if (!track || !geo.position) return null;
@@ -344,8 +284,8 @@ function App() {
         isLoading={auth.isLoading}
         pseudo={profile.pseudo}
         settings={settings}
-        canModerate={canModerate(role.type)}
-        isAdmin={isAdmin(role.type)}
+        canModerate={userCanModerate}
+        isAdmin={userIsAdmin}
         onSignIn={auth.signInWithGoogle}
         onSignOut={handleSignOut}
         onUpdatePseudo={profile.updatePseudo}
@@ -358,7 +298,7 @@ function App() {
         <DiscoveryView
           user={auth.user}
           unitSystem={settings.unitSystem}
-          canModerate={canModerate(role.type)}
+          canModerate={userCanModerate}
           onLoadRide={handleLoadRide}
           onClose={closeView}
         />
@@ -382,10 +322,10 @@ function App() {
         />
       )}
 
-      {view === 'fuel-log' && auth.user && !canAccessPremium(role.type) && (
+      {view === 'fuel-log' && auth.user && !userCanAccessPremium && (
         <PremiumUnlockView user={auth.user} onClose={closeView} onRoleGranted={refreshRole} />
       )}
-      {view === 'fuel-log' && auth.user && canAccessPremium(role.type) && (
+      {view === 'fuel-log' && auth.user && userCanAccessPremium && (
         <FuelLogView
           user={auth.user}
           unitSystem={settings.unitSystem}
@@ -394,18 +334,18 @@ function App() {
         />
       )}
 
-      {view === 'statistics' && auth.user && !canAccessPremium(role.type) && (
+      {view === 'statistics' && auth.user && !userCanAccessPremium && (
         <PremiumUnlockView user={auth.user} onClose={closeView} onRoleGranted={refreshRole} />
       )}
-      {view === 'statistics' && auth.user && canAccessPremium(role.type) && <StatisticsView onClose={closeView} />}
+      {view === 'statistics' && auth.user && userCanAccessPremium && <StatisticsView onClose={closeView} />}
 
       {view === 'feedback' && auth.user && <FeedbackView user={auth.user} onClose={closeView} />}
 
-      {view === 'feedback-admin' && auth.user && canModerate(role.type) && (
+      {view === 'feedback-admin' && auth.user && userCanModerate && (
         <FeedbackAdminView user={auth.user} onClose={closeView} />
       )}
 
-      {view === 'admin-roles' && auth.user && isAdmin(role.type) && (
+      {view === 'admin-roles' && auth.user && userIsAdmin && (
         <AdminRolesView user={auth.user} onClose={closeView} />
       )}
 
@@ -446,7 +386,7 @@ function App() {
           <HomeCards
             user={auth.user}
             unitSystem={settings.unitSystem}
-            canAccessPremium={canAccessPremium(role.type)}
+            canAccessPremium={userCanAccessPremium}
             onNavigate={navigateFromMenu}
           />
         </main>
