@@ -16,18 +16,25 @@ service cloud.firestore {
       allow read: if resource.data.visibility == 'public' || request.auth.uid == resource.data.ownerId;
       allow create: if request.auth != null && request.auth.uid == request.resource.data.ownerId;
 
-      // Trois cas distincts : le proprietaire garde un acces complet ; un
-      // moderateur/admin ne peut que renommer (jamais toucher geometrie/
-      // visibilite/ownerId d'un parcours qui n'est pas le sien) ; n'importe
-      // quel utilisateur authentifie peut incrementer les compteurs
-      // d'engagement d'un parcours public (telechargement/suivi).
+      // Trois cas distincts : le proprietaire garde un acces complet (sauf
+      // repasser un parcours public en prive - publication irreversible) ; un
+      // moderateur/admin peut renommer et/ou retirer un parcours de Decouverte
+      // (repasser prive) mais jamais toucher geometrie/ownerId d'un parcours qui
+      // n'est pas le sien ; n'importe quel utilisateur authentifie peut
+      // incrementer les compteurs d'engagement d'un parcours public (telechargement/suivi).
       allow update: if request.auth != null && (
-        request.auth.uid == resource.data.ownerId ||
-        (isModerator() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['title'])) ||
+        (request.auth.uid == resource.data.ownerId &&
+          !(resource.data.visibility == 'public' && request.resource.data.visibility == 'private')) ||
+        (isModerator() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['title', 'visibility'])) ||
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['downloadCount', 'followCount'])
       );
 
-      allow delete: if request.auth != null && (request.auth.uid == resource.data.ownerId || isModerator());
+      // Un parcours devenu public ne peut plus etre supprime par son
+      // proprietaire, seulement par un moderateur/admin (publication irreversible).
+      allow delete: if request.auth != null && (
+        (request.auth.uid == resource.data.ownerId && resource.data.visibility != 'public') ||
+        isModerator()
+      );
 
       // Presence pure (le doc existe ou non) pour compter les utilisateurs
       // distincts ayant telecharge/suivi - jamais relu cote client.
@@ -52,6 +59,10 @@ service cloud.firestore {
       }
 
       match /fuelLogs/{entryId} {
+        allow read, write: if request.auth != null && request.auth.uid == uid;
+      }
+
+      match /vehicles/{vehicleId} {
         allow read, write: if request.auth != null && request.auth.uid == uid;
       }
     }

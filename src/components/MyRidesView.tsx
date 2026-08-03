@@ -2,12 +2,13 @@ import { useState } from 'react';
 import type { User } from 'firebase/auth';
 import { useFavoriteToggle } from '../hooks/useFavoriteToggle';
 import { useMyRides } from '../hooks/useMyRides';
-import { deleteRide } from '../utils/rideStorage';
+import { deleteRide, publishRide } from '../utils/rideStorage';
 import { DEFAULT_RIDE_FILTERS, filterRides, type RideFiltersValue } from '../utils/rideFilters';
 import { formatDistance } from '../utils/units';
 import { DeleteRideDialog } from './DeleteRideDialog';
 import { DownloadGpxButton } from './DownloadGpxButton';
 import { FavoriteStarButton } from './FavoriteStarButton';
+import { PublishRideDialog } from './PublishRideDialog';
 import { RideFilters } from './RideFilters';
 import { RideListScreen } from './RideListScreen';
 import type { Ride, UnitSystem } from '../types';
@@ -23,12 +24,20 @@ export function MyRidesView({ user, unitSystem, onLoadRide, onClose }: MyRidesVi
   const { rides, isLoading, error, refresh } = useMyRides(user);
   const { favoriteIds, isPending, toggleFavorite } = useFavoriteToggle(user);
   const [pendingDelete, setPendingDelete] = useState<Ride | null>(null);
+  const [pendingPublish, setPendingPublish] = useState<Ride | null>(null);
   const [filters, setFilters] = useState<RideFiltersValue>(DEFAULT_RIDE_FILTERS);
 
   const handleConfirmDelete = async () => {
     if (!pendingDelete) return;
     await deleteRide(pendingDelete.id);
     setPendingDelete(null);
+    refresh();
+  };
+
+  const handleConfirmPublish = async () => {
+    if (!pendingPublish) return;
+    await publishRide(pendingPublish.id);
+    setPendingPublish(null);
     refresh();
   };
 
@@ -70,9 +79,16 @@ export function MyRidesView({ user, unitSystem, onLoadRide, onClose }: MyRidesVi
               Suivre
             </button>
             <DownloadGpxButton ride={ride} user={user} />
-            <button type="button" className="button button-secondary" onClick={() => setPendingDelete(ride)}>
-              Supprimer
-            </button>
+            {ride.visibility === 'private' && (
+              <button type="button" className="button button-ghost" onClick={() => setPendingPublish(ride)}>
+                Rendre publique
+              </button>
+            )}
+            {ride.visibility === 'private' && (
+              <button type="button" className="button button-secondary" onClick={() => setPendingDelete(ride)}>
+                Supprimer
+              </button>
+            )}
           </>
         )}
       />
@@ -82,6 +98,14 @@ export function MyRidesView({ user, unitSystem, onLoadRide, onClose }: MyRidesVi
           ride={pendingDelete}
           onConfirm={handleConfirmDelete}
           onCancel={() => setPendingDelete(null)}
+        />
+      )}
+
+      {pendingPublish && (
+        <PublishRideDialog
+          ride={pendingPublish}
+          onConfirm={handleConfirmPublish}
+          onCancel={() => setPendingPublish(null)}
         />
       )}
     </>

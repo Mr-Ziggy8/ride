@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import type { User } from 'firebase/auth';
 import { useFuelLogs } from '../hooks/useFuelLogs';
 import { useMyRides } from '../hooks/useMyRides';
+import { useVehicles } from '../hooks/useVehicles';
 import { addFuelLog } from '../utils/fuelLogStorage';
 import {
   convertDistanceValue,
@@ -29,11 +30,13 @@ function todayInputValue(): string {
 export function FuelLogView({ user, unitSystem, fuelUnit, onClose }: FuelLogViewProps) {
   const { entries, isLoading, error, refresh } = useFuelLogs(user);
   const { rides } = useMyRides(user);
+  const { vehicles } = useVehicles(user);
 
   const [dateInput, setDateInput] = useState(todayInputValue);
   const [volumeInput, setVolumeInput] = useState('');
   const [distanceInput, setDistanceInput] = useState('0');
   const [isDistanceManuallyAdjusted, setIsDistanceManuallyAdjusted] = useState(false);
+  const [vehicleId, setVehicleId] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -76,6 +79,7 @@ export function FuelLogView({ user, unitSystem, fuelUnit, onClose }: FuelLogView
         volumeLiters,
         distanceSinceLastFillMeters: distanceMeters,
         isDistanceManuallyAdjusted,
+        vehicleId: vehicleId || null,
       });
       setVolumeInput('');
       setIsDistanceManuallyAdjusted(false);
@@ -139,6 +143,20 @@ export function FuelLogView({ user, unitSystem, fuelUnit, onClose }: FuelLogView
         </label>
         {!isDistanceManuallyAdjusted && (
           <p className="my-rides-hint">Distance calculée automatiquement depuis tes parcours enregistrés.</p>
+        )}
+
+        {vehicles && vehicles.length > 0 && (
+          <label className="dialog-field">
+            Véhicule (optionnel)
+            <select value={vehicleId} onChange={(event) => setVehicleId(event.target.value)} disabled={isSaving}>
+              <option value="">—</option>
+              {vehicles.map((vehicle) => (
+                <option key={vehicle.id} value={vehicle.id}>
+                  {vehicle.name}
+                </option>
+              ))}
+            </select>
+          </label>
         )}
 
         {formError && <p className="dialog-error">{formError}</p>}

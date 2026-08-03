@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
+import type { User } from 'firebase/auth';
 import { EU_COUNTRIES_REGIONS } from '../data/euCountriesRegions';
+import { useVehicles } from '../hooks/useVehicles';
 import { reverseGeocodeCityName } from '../utils/geocoding';
 import type { RideVisibility } from '../types';
 
@@ -11,22 +13,41 @@ interface LatLng {
 }
 
 interface SaveRideDialogProps {
+  user: User;
+  /** Garage multi-vehicules (feature premium) - le selecteur ne s'affiche que si actif et non vide. */
+  canAccessPremium: boolean;
   defaultTitle: string;
   /** Utilises pour suggerer un titre "Ville A vers Ville B" - null si indisponibles. */
   startPoint: LatLng | null;
   endPoint: LatLng | null;
-  onSave: (title: string, visibility: RideVisibility, country: string | null, region: string | null) => Promise<void>;
+  onSave: (
+    title: string,
+    visibility: RideVisibility,
+    country: string | null,
+    region: string | null,
+    vehicleId: string | null,
+  ) => Promise<void>;
   onCancel: () => void;
 }
 
-export function SaveRideDialog({ defaultTitle, startPoint, endPoint, onSave, onCancel }: SaveRideDialogProps) {
+export function SaveRideDialog({
+  user,
+  canAccessPremium,
+  defaultTitle,
+  startPoint,
+  endPoint,
+  onSave,
+  onCancel,
+}: SaveRideDialogProps) {
   const [title, setTitle] = useState(defaultTitle);
   const [visibility, setVisibility] = useState<RideVisibility>('private');
   const [country, setCountry] = useState(DEFAULT_COUNTRY);
   const [region, setRegion] = useState('');
+  const [vehicleId, setVehicleId] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const hasUserEditedTitleRef = useRef(false);
+  const { vehicles } = useVehicles(user);
 
   // Suggestion de titre "Ville de depart vers Ville d'arrivee" - ne remplace
   // jamais un titre que l'utilisateur a deja commence a modifier lui-meme.
@@ -72,7 +93,7 @@ export function SaveRideDialog({ defaultTitle, startPoint, endPoint, onSave, onC
     setIsSaving(true);
     setError(null);
     try {
-      await onSave(trimmedTitle, visibility, country || null, region || null);
+      await onSave(trimmedTitle, visibility, country || null, region || null, vehicleId || null);
     } catch {
       setError('Échec de la sauvegarde. Réessaie.');
       setIsSaving(false);
@@ -145,6 +166,20 @@ export function SaveRideDialog({ defaultTitle, startPoint, endPoint, onSave, onC
           </select>
         </label>
         <p className="dialog-warning">Si le parcours traverse plusieurs régions, indique celle de départ.</p>
+
+        {canAccessPremium && vehicles && vehicles.length > 0 && (
+          <label className="dialog-field">
+            Véhicule (optionnel)
+            <select value={vehicleId} onChange={(event) => setVehicleId(event.target.value)} disabled={isSaving}>
+              <option value="">—</option>
+              {vehicles.map((vehicle) => (
+                <option key={vehicle.id} value={vehicle.id}>
+                  {vehicle.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
 
         {error && <p className="dialog-error">{error}</p>}
 

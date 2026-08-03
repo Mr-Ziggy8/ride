@@ -84,6 +84,16 @@ export interface Ride {
   region: string | null;
   downloadCount: number;
   followCount: number;
+  /** Purement informatif (garage multi-vehicules, feature premium) - n'affecte jamais le tracage/les stats du parcours. */
+  vehicleId: string | null;
+}
+
+/** Garage multi-vehicules (feature premium) - purement informatif : associe un
+ * parcours ou un plein a une moto, sans impact sur la logique de tracage. */
+export interface Vehicle {
+  id: string;
+  name: string;
+  createdAtMs: number;
 }
 
 /** Point bufferise localement pendant un enregistrement, avant aplatissement en StoredTrackPoint a la sauvegarde. */

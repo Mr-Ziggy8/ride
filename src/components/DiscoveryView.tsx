@@ -2,15 +2,15 @@ import { useState } from 'react';
 import type { User } from 'firebase/auth';
 import { useFavoriteToggle } from '../hooks/useFavoriteToggle';
 import { usePublicRides } from '../hooks/usePublicRides';
-import { deleteRide, renameRide } from '../utils/rideStorage';
+import { renameRide, unpublishRide } from '../utils/rideStorage';
 import { DEFAULT_RIDE_FILTERS, filterRides, type RideFiltersValue } from '../utils/rideFilters';
 import { formatDistance } from '../utils/units';
-import { DeleteRideDialog } from './DeleteRideDialog';
 import { DownloadGpxButton } from './DownloadGpxButton';
 import { FavoriteStarButton } from './FavoriteStarButton';
 import { RenameRideDialog } from './RenameRideDialog';
 import { RideFilters } from './RideFilters';
 import { RideListScreen } from './RideListScreen';
+import { UnpublishRideDialog } from './UnpublishRideDialog';
 import type { Ride, UnitSystem } from '../types';
 
 interface DiscoveryViewProps {
@@ -27,7 +27,7 @@ export function DiscoveryView({ user, unitSystem, showModTools, onLoadRide, onCl
   const { rides, isLoading, error, refresh } = usePublicRides();
   const { favoriteIds, isPending, toggleFavorite } = useFavoriteToggle(user);
   const [renamingRide, setRenamingRide] = useState<Ride | null>(null);
-  const [deletingRide, setDeletingRide] = useState<Ride | null>(null);
+  const [unpublishingRide, setUnpublishingRide] = useState<Ride | null>(null);
   const [filters, setFilters] = useState<RideFiltersValue>(DEFAULT_RIDE_FILTERS);
 
   const handleConfirmRename = async (newTitle: string) => {
@@ -37,10 +37,10 @@ export function DiscoveryView({ user, unitSystem, showModTools, onLoadRide, onCl
     refresh();
   };
 
-  const handleConfirmDelete = async () => {
-    if (!deletingRide) return;
-    await deleteRide(deletingRide.id);
-    setDeletingRide(null);
+  const handleConfirmUnpublish = async () => {
+    if (!unpublishingRide) return;
+    await unpublishRide(unpublishingRide.id);
+    setUnpublishingRide(null);
     refresh();
   };
 
@@ -89,8 +89,8 @@ export function DiscoveryView({ user, unitSystem, showModTools, onLoadRide, onCl
                 <button type="button" className="button button-ghost" onClick={() => setRenamingRide(ride)}>
                   Renommer
                 </button>
-                <button type="button" className="button button-secondary" onClick={() => setDeletingRide(ride)}>
-                  Supprimer
+                <button type="button" className="button button-secondary" onClick={() => setUnpublishingRide(ride)}>
+                  Retirer
                 </button>
               </>
             )}
@@ -106,8 +106,12 @@ export function DiscoveryView({ user, unitSystem, showModTools, onLoadRide, onCl
         />
       )}
 
-      {deletingRide && (
-        <DeleteRideDialog ride={deletingRide} onConfirm={handleConfirmDelete} onCancel={() => setDeletingRide(null)} />
+      {unpublishingRide && (
+        <UnpublishRideDialog
+          ride={unpublishingRide}
+          onConfirm={handleConfirmUnpublish}
+          onCancel={() => setUnpublishingRide(null)}
+        />
       )}
     </>
   );

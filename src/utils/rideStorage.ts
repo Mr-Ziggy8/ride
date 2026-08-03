@@ -71,6 +71,7 @@ export async function saveRide(
   pseudo: string | null,
   country: string | null,
   region: string | null,
+  vehicleId: string | null,
 ): Promise<string> {
   const centerLng = (track.bounds[0] + track.bounds[2]) / 2;
   const centerLat = (track.bounds[1] + track.bounds[3]) / 2;
@@ -91,6 +92,7 @@ export async function saveRide(
     region,
     downloadCount: 0,
     followCount: 0,
+    vehicleId,
   });
   return docRef.id;
 }
@@ -107,6 +109,7 @@ export async function saveRecordedRide(
   pseudo: string | null,
   country: string | null,
   region: string | null,
+  vehicleId: string | null,
 ): Promise<string> {
   const bounds = computeBounds(points.map((p) => [p.lng, p.lat]));
   const centerLng = (bounds[0] + bounds[2]) / 2;
@@ -134,6 +137,7 @@ export async function saveRecordedRide(
     region,
     downloadCount: 0,
     followCount: 0,
+    vehicleId,
   });
   return docRef.id;
 }
@@ -141,6 +145,19 @@ export async function saveRecordedRide(
 /** Moderateur/Admin uniquement (voir firestore.rules) - ne touche que le titre. */
 export async function renameRide(rideId: string, title: string): Promise<void> {
   await updateDoc(doc(db, 'rides', rideId), { title });
+}
+
+/** Irreversible cote regles (voir firestore.rules) : une fois public, le
+ * proprietaire ne peut plus repasser ce parcours en prive ni le supprimer. */
+export async function publishRide(rideId: string): Promise<void> {
+  await updateDoc(doc(db, 'rides', rideId), { visibility: 'public' });
+}
+
+/** Moderateur/Admin uniquement (voir firestore.rules) - retire un parcours de
+ * Decouverte en le repassant prive, sans toucher aux donnees du proprietaire :
+ * il reste visible dans "Mes parcours" (cf. listMyRides, non filtre par visibilite). */
+export async function unpublishRide(rideId: string): Promise<void> {
+  await updateDoc(doc(db, 'rides', rideId), { visibility: 'private' });
 }
 
 /**
@@ -195,6 +212,7 @@ export function mapRideDoc(docSnapshot: QueryDocumentSnapshot<DocumentData>): Ri
     region: data.region ?? null,
     downloadCount: data.downloadCount ?? 0,
     followCount: data.followCount ?? 0,
+    vehicleId: data.vehicleId ?? null,
   } satisfies Ride;
 }
 

@@ -8,6 +8,8 @@ export interface FuelLogEntry {
   volumeLiters: number;
   distanceSinceLastFillMeters: number;
   isDistanceManuallyAdjusted: boolean;
+  /** Purement informatif (garage multi-vehicules, feature premium). */
+  vehicleId: string | null;
 }
 
 export interface NewFuelLogEntry {
@@ -15,6 +17,7 @@ export interface NewFuelLogEntry {
   volumeLiters: number;
   distanceSinceLastFillMeters: number;
   isDistanceManuallyAdjusted: boolean;
+  vehicleId: string | null;
 }
 
 export async function addFuelLog(uid: string, entry: NewFuelLogEntry): Promise<string> {
@@ -23,6 +26,7 @@ export async function addFuelLog(uid: string, entry: NewFuelLogEntry): Promise<s
     volumeLiters: entry.volumeLiters,
     distanceSinceLastFillMeters: entry.distanceSinceLastFillMeters,
     isDistanceManuallyAdjusted: entry.isDistanceManuallyAdjusted,
+    vehicleId: entry.vehicleId,
   });
   return docRef.id;
 }
@@ -40,6 +44,7 @@ export async function listFuelLogs(uid: string): Promise<FuelLogEntry[]> {
       volumeLiters: data.volumeLiters,
       distanceSinceLastFillMeters: data.distanceSinceLastFillMeters,
       isDistanceManuallyAdjusted: data.isDistanceManuallyAdjusted ?? false,
+      vehicleId: data.vehicleId ?? null,
     };
   });
 }

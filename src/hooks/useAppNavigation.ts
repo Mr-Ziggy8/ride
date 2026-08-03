@@ -9,6 +9,7 @@ export type ViewMode =
   | 'favorites'
   | 'fuel-log'
   | 'statistics'
+  | 'vehicles'
   | 'feedback'
   | 'feedback-admin'
   | 'admin-roles';

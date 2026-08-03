@@ -16,6 +16,7 @@ import { ElevationChart } from './components/ElevationChart';
 import { RecordingScreen } from './components/RecordingScreen';
 import { SaveRideDialog } from './components/SaveRideDialog';
 import { StatisticsView } from './components/StatisticsView';
+import { VehiclesView } from './components/VehiclesView';
 import { useAppNavigation } from './hooks/useAppNavigation';
 import { useAuth } from './hooks/useAuth';
 import { useGeolocation } from './hooks/useGeolocation';
@@ -89,6 +90,7 @@ function App() {
       view === 'favorites' ||
       view === 'fuel-log' ||
       view === 'statistics' ||
+      view === 'vehicles' ||
       view === 'feedback' ||
       view === 'feedback-admin' ||
       view === 'admin-roles';
@@ -178,9 +180,10 @@ function App() {
     visibility: RideVisibility,
     country: string | null,
     region: string | null,
+    vehicleId: string | null,
   ) => {
     if (!auth.user || !track) return;
-    await saveRide(auth.user, track, title, visibility, profile.pseudo, country, region);
+    await saveRide(auth.user, track, title, visibility, profile.pseudo, country, region, vehicleId);
     setIsSaveDialogOpen(false);
     setSaveSuccessMessage('Parcours sauvegardé.');
   };
@@ -206,10 +209,21 @@ function App() {
     visibility: RideVisibility,
     country: string | null,
     region: string | null,
+    vehicleId: string | null,
   ) => {
     if (!auth.user) return;
     const storedPoints = recording.points.map(({ lng, lat, ele, gap }) => ({ lng, lat, ele, gap }));
-    await saveRecordedRide(auth.user, storedPoints, recording.stats, title, visibility, profile.pseudo, country, region);
+    await saveRecordedRide(
+      auth.user,
+      storedPoints,
+      recording.stats,
+      title,
+      visibility,
+      profile.pseudo,
+      country,
+      region,
+      vehicleId,
+    );
     recording.discard();
     setSaveSuccessMessage('Parcours enregistré et sauvegardé.');
   };
@@ -340,6 +354,13 @@ function App() {
       )}
       {view === 'statistics' && auth.user && userCanAccessPremium && <StatisticsView onClose={closeView} />}
 
+      {view === 'vehicles' && auth.user && !userCanAccessPremium && (
+        <PremiumUnlockView user={auth.user} onClose={closeView} onRoleGranted={refreshRole} />
+      )}
+      {view === 'vehicles' && auth.user && userCanAccessPremium && (
+        <VehiclesView user={auth.user} onClose={closeView} />
+      )}
+
       {view === 'feedback' && auth.user && <FeedbackView user={auth.user} onClose={closeView} />}
 
       {view === 'feedback-admin' && auth.user && userCanModerate && (
@@ -442,6 +463,8 @@ function App() {
 
       {isSaveDialogOpen && track && auth.user && (
         <SaveRideDialog
+          user={auth.user}
+          canAccessPremium={userCanAccessPremium}
           defaultTitle={`Parcours du ${new Date().toLocaleDateString('fr-FR')}`}
           startPoint={trackEndpoints.start}
           endPoint={trackEndpoints.end}
@@ -452,6 +475,8 @@ function App() {
 
       {recording.status === 'finished_pending_save' && auth.user && (
         <SaveRideDialog
+          user={auth.user}
+          canAccessPremium={userCanAccessPremium}
           defaultTitle={`Parcours du ${new Date().toLocaleDateString('fr-FR')}`}
           startPoint={recordingEndpoints.start}
           endPoint={recordingEndpoints.end}
