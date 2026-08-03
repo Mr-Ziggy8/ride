@@ -71,7 +71,7 @@ export function FeedbackAdminView({ user, onClose }: FeedbackAdminViewProps) {
                   <p className="feedback-admin-message">{entry.message}</p>
                   <span className="my-rides-item-meta">{new Date(entry.createdAtMs).toLocaleDateString('fr-FR')}</span>
                 </div>
-                <div className="my-rides-item-actions">
+                <div className="feedback-admin-actions">
                   <button
                     type="button"
                     className="button button-ghost"

@@ -1158,6 +1158,21 @@ h1 {
   padding: 12px 14px;
 }
 
+/* Distincte de .my-rides-item-actions : .feedback-admin-item n'a pas de
+ * flex-wrap, donc un enfant en flex-basis 100% (le layout "incard" des listes
+ * de parcours) s'y ecrase au lieu de passer a la ligne - texte des boutons
+ * compresse jusqu'a wrapper caractere par caractere. Actions compactes a
+ * droite ici, pas de retour a la ligne force. */
+.feedback-admin-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  max-width: 100%;
+  flex-shrink: 0;
+}
+
 .feedback-admin-score {
   font-size: 18px;
   font-weight: 700;
