@@ -15,6 +15,7 @@ import { ProgressPanel } from './components/ProgressPanel';
 import { ElevationChart } from './components/ElevationChart';
 import { RecordingScreen } from './components/RecordingScreen';
 import { SaveRideDialog } from './components/SaveRideDialog';
+import { BadgesView } from './components/BadgesView';
 import { StatisticsView } from './components/StatisticsView';
 import { VehiclesView } from './components/VehiclesView';
 import { useAppNavigation } from './hooks/useAppNavigation';
@@ -91,6 +92,7 @@ function App() {
       view === 'fuel-log' ||
       view === 'statistics' ||
       view === 'vehicles' ||
+      view === 'badges' ||
       view === 'feedback' ||
       view === 'feedback-admin' ||
       view === 'admin-roles';
@@ -352,13 +354,21 @@ function App() {
       {view === 'statistics' && auth.user && !userCanAccessPremium && (
         <PremiumUnlockView user={auth.user} onClose={closeView} onRoleGranted={refreshRole} />
       )}
-      {view === 'statistics' && auth.user && userCanAccessPremium && <StatisticsView onClose={closeView} />}
+      {view === 'statistics' && auth.user && userCanAccessPremium && (
+        <StatisticsView user={auth.user} unitSystem={settings.unitSystem} onClose={closeView} />
+      )}
 
       {view === 'vehicles' && auth.user && !userCanAccessPremium && (
         <PremiumUnlockView user={auth.user} onClose={closeView} onRoleGranted={refreshRole} />
       )}
       {view === 'vehicles' && auth.user && userCanAccessPremium && (
         <VehiclesView user={auth.user} onClose={closeView} />
+      )}
+
+      {/* Pas de garde premium ici : le parrainage doit rester accessible aux
+       * comptes gratuits pour faire grandir la base d'utilisateurs. */}
+      {view === 'badges' && auth.user && (
+        <BadgesView user={auth.user} onClose={closeView} onRoleGranted={refreshRole} />
       )}
 
       {view === 'feedback' && auth.user && <FeedbackView user={auth.user} onClose={closeView} />}

@@ -51,17 +51,26 @@ export function formatVolume(volumeLiters: number, fuelUnit: FuelUnit): string {
   return `${convertVolumeValue(volumeLiters, fuelUnit).toFixed(2)} ${volumeUnitLabel(fuelUnit)}`;
 }
 
-/** Convention d'affichage classique - L/100km ou MPG - pilotee par unitSystem
- * (pas par fuelUnit, qui ne controle que la saisie/l'affichage du volume seul). */
-export function formatConsumption(volumeLiters: number, distanceMeters: number, unitSystem: UnitSystem): string {
-  if (distanceMeters <= 0 || volumeLiters <= 0) return '—';
+/** Valeur numerique brute (L/100km ou MPG selon unitSystem) - null si pas
+ * calculable (distance/volume nul ou negatif). Extrait pour etre reutilisable
+ * telle quelle par les graphes de stats, sans repasser par une chaine formatee. */
+export function computeConsumptionValue(volumeLiters: number, distanceMeters: number, unitSystem: UnitSystem): number | null {
+  if (distanceMeters <= 0 || volumeLiters <= 0) return null;
   if (unitSystem === 'imperial') {
     const miles = distanceMeters / METERS_PER_MILE;
     const gallons = volumeLiters / LITERS_PER_US_GALLON;
-    return `${(miles / gallons).toFixed(1)} mpg`;
+    return miles / gallons;
   }
   const km = distanceMeters / 1000;
-  return `${((volumeLiters / km) * 100).toFixed(2)} L/100km`;
+  return (volumeLiters / km) * 100;
+}
+
+/** Convention d'affichage classique - L/100km ou MPG - pilotee par unitSystem
+ * (pas par fuelUnit, qui ne controle que la saisie/l'affichage du volume seul). */
+export function formatConsumption(volumeLiters: number, distanceMeters: number, unitSystem: UnitSystem): string {
+  const value = computeConsumptionValue(volumeLiters, distanceMeters, unitSystem);
+  if (value === null) return '—';
+  return unitSystem === 'imperial' ? `${value.toFixed(1)} mpg` : `${value.toFixed(2)} L/100km`;
 }
 
 export function formatDuration(totalSeconds: number): string {

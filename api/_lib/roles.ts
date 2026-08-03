@@ -2,7 +2,7 @@ import { FieldValue } from 'firebase-admin/firestore';
 import { getAdminDb } from './firebaseAdmin.js';
 
 export type RoleType = 'free' | 'paid' | 'moderator' | 'admin';
-type PaidVia = 'stripe' | 'promo_code';
+type PaidVia = 'stripe' | 'promo_code' | 'referral';
 
 export const ALREADY_AT_LEAST_PAID = new Set<RoleType>(['paid', 'moderator', 'admin']);
 

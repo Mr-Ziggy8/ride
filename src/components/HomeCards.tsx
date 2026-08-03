@@ -29,6 +29,7 @@ const ACCOUNT_CARDS: HomeCardDef[] = [
   { destination: 'fuel-log', icon: '⛽', label: 'Carnet de pleins' },
   { destination: 'statistics', icon: '📊', label: 'Statistiques' },
   { destination: 'vehicles', icon: '🏍️', label: 'Mes véhicules' },
+  { destination: 'badges', icon: '🏅', label: 'Mes badges' },
 ];
 
 /** Distance/nombre de parcours "reels" uniquement (source recorded) - meme

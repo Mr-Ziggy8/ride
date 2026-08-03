@@ -144,5 +144,5 @@ export type UserRoleType = 'free' | 'paid' | 'moderator' | 'admin';
 export interface UserRole {
   type: UserRoleType;
   grantedAt: number | null;
-  grantedVia: 'stripe' | 'promo_code' | 'admin_manual' | null;
+  grantedVia: 'stripe' | 'promo_code' | 'admin_manual' | 'referral' | null;
 }

@@ -12,6 +12,7 @@ export type SidebarDestination =
   | 'fuel-log'
   | 'statistics'
   | 'vehicles'
+  | 'badges'
   | 'feedback'
   | 'feedback-admin'
   | 'admin-roles';
@@ -152,6 +153,11 @@ export function AppSidebar({
           {user && (
             <button type="button" className="button button-ghost" onClick={() => onNavigate('vehicles')}>
               Mes véhicules
+            </button>
+          )}
+          {user && (
+            <button type="button" className="button button-ghost" onClick={() => onNavigate('badges')}>
+              Mes badges
             </button>
           )}
           {user && (

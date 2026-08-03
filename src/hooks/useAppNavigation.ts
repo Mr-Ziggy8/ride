@@ -10,6 +10,7 @@ export type ViewMode =
   | 'fuel-log'
   | 'statistics'
   | 'vehicles'
+  | 'badges'
   | 'feedback'
   | 'feedback-admin'
   | 'admin-roles';

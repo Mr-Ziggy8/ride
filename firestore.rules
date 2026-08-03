@@ -84,6 +84,27 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Stats de gamification (distance/regions/parrainages) - lecture seule pour
+    // le proprietaire (affiche XP/badges, tous derives cote client de ces
+    // compteurs), ecrits uniquement par les fonctions serveur sync-user-stats
+    // et redeem-referral-code (jamais par le client, meme le proprietaire).
+    match /userStats/{uid} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow write: if false;
+    }
+
+    // Meme logique que promoCodes : code de parrainage unique par utilisateur,
+    // gere entierement par create-referral-code/redeem-referral-code.
+    match /referralCodes/{code} {
+      allow read, write: if false;
+
+      // Presence pure (un ami par code, jamais relue cote client) - empeche un
+      // meme ami de redeclencher deux fois la recompense du parrain.
+      match /redemptions/{friendUid} {
+        allow read, write: if false;
+      }
+    }
+
     match /feedback/{entryId} {
       allow create: if request.auth != null && request.auth.uid == request.resource.data.uid;
       // Un moderateur voit tout ; un utilisateur ne relit que ses propres
