@@ -299,7 +299,7 @@ function App() {
         <DiscoveryView
           user={auth.user}
           unitSystem={settings.unitSystem}
-          showModTools={userCanModerate && settings.modOptionsEnabled}
+          showModTools={userCanModerate && settings.adminOptionsEnabled}
           onLoadRide={handleLoadRide}
           onClose={closeView}
         />

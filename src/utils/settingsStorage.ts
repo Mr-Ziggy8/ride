@@ -7,7 +7,7 @@ export const DEFAULT_SETTINGS: Settings = {
   fuelUnit: 'liters',
   theme: 'system',
   language: 'fr',
-  modOptionsEnabled: false,
+  adminOptionsEnabled: false,
 };
 
 export function loadLocalSettings(): Settings {

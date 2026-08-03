@@ -153,12 +153,12 @@ export function AppSidebar({
               Envoyer un commentaire
             </button>
           )}
-          {user && canModerate && (
+          {user && canModerate && settings.adminOptionsEnabled && (
             <button type="button" className="button button-ghost" onClick={() => onNavigate('feedback-admin')}>
               Feedbacks
             </button>
           )}
-          {user && isAdmin && (
+          {user && isAdmin && settings.adminOptionsEnabled && (
             <button type="button" className="button button-ghost" onClick={() => onNavigate('admin-roles')}>
               Gestion des rôles
             </button>
@@ -167,10 +167,10 @@ export function AppSidebar({
 
         {user && canModerate && (
           <div className="sidebar-field">
-            <span className="sidebar-field-title">Options modo</span>
+            <span className="sidebar-field-title">Options admin</span>
             <ToggleSwitch
-              checked={settings.modOptionsEnabled}
-              onChange={(enabled) => onUpdateSettings({ modOptionsEnabled: enabled })}
+              checked={settings.adminOptionsEnabled}
+              onChange={(enabled) => onUpdateSettings({ adminOptionsEnabled: enabled })}
               leftLabel="Masquées"
               rightLabel="Visibles"
             />
