@@ -9,7 +9,7 @@ export type SidebarDestination =
   | 'discovery'
   | 'my-rides'
   | 'favorites'
-  | 'fuel-log'
+  | 'maintenance-book'
   | 'statistics'
   | 'vehicles'
   | 'badges'
@@ -142,8 +142,8 @@ export function AppSidebar({
             </button>
           )}
           {user && (
-            <button type="button" className="button button-ghost" onClick={() => onNavigate('fuel-log')}>
-              Carnet de pleins
+            <button type="button" className="button button-ghost" onClick={() => onNavigate('maintenance-book')}>
+              Carnet d'entretien
             </button>
           )}
           {user && (

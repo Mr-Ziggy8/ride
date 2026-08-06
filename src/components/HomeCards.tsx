@@ -26,7 +26,7 @@ const PUBLIC_CARDS: HomeCardDef[] = [
 const ACCOUNT_CARDS: HomeCardDef[] = [
   { destination: 'my-rides', icon: '🗂️', label: 'Mes parcours' },
   { destination: 'favorites', icon: '⭐', label: 'Mes favoris' },
-  { destination: 'fuel-log', icon: '⛽', label: 'Carnet de pleins' },
+  { destination: 'maintenance-book', icon: '🔧', label: "Carnet d'entretien" },
   { destination: 'statistics', icon: '📊', label: 'Statistiques' },
   { destination: 'vehicles', icon: '🏍️', label: 'Mes véhicules' },
   { destination: 'badges', icon: '🏅', label: 'Mes badges' },

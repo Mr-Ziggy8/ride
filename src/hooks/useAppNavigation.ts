@@ -7,7 +7,7 @@ export type ViewMode =
   | 'my-rides'
   | 'discovery'
   | 'favorites'
-  | 'fuel-log'
+  | 'maintenance-book'
   | 'statistics'
   | 'vehicles'
   | 'badges'

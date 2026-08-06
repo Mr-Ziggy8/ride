@@ -6,9 +6,9 @@ import { DiscoveryView } from './components/DiscoveryView';
 import { FavoritesView } from './components/FavoritesView';
 import { FeedbackAdminView } from './components/FeedbackAdminView';
 import { FeedbackView } from './components/FeedbackView';
-import { FuelLogView } from './components/FuelLogView';
 import { GpxUploader } from './components/GpxUploader';
 import { HomeCards } from './components/HomeCards';
+import { MaintenanceBookView } from './components/MaintenanceBookView';
 import { MapView } from './components/MapView';
 import { MyRidesView } from './components/MyRidesView';
 import { PremiumUnlockView } from './components/PremiumUnlockView';
@@ -90,7 +90,7 @@ function App() {
     const requiresAccount =
       view === 'my-rides' ||
       view === 'favorites' ||
-      view === 'fuel-log' ||
+      view === 'maintenance-book' ||
       view === 'statistics' ||
       view === 'vehicles' ||
       view === 'badges' ||
@@ -341,11 +341,11 @@ function App() {
         />
       )}
 
-      {view === 'fuel-log' && auth.user && !userCanAccessPremium && (
+      {view === 'maintenance-book' && auth.user && !userCanAccessPremium && (
         <PremiumUnlockView user={auth.user} onClose={closeView} onRoleGranted={refreshRole} />
       )}
-      {view === 'fuel-log' && auth.user && userCanAccessPremium && (
-        <FuelLogView
+      {view === 'maintenance-book' && auth.user && userCanAccessPremium && (
+        <MaintenanceBookView
           user={auth.user}
           unitSystem={settings.unitSystem}
           fuelUnit={settings.fuelUnit}

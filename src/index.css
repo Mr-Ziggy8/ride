@@ -947,18 +947,6 @@ h1 {
   border-radius: 10px;
 }
 
-.fuel-log-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 12px 14px;
-  font-size: 13px;
-}
-
 .premium-unlock-body {
   display: flex;
   flex-direction: column;

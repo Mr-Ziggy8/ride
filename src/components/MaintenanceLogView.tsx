@@ -1,71 +1,56 @@
 import { useState } from 'react';
 import type { User } from 'firebase/auth';
-import { useFuelLogs } from '../hooks/useFuelLogs';
+import { useMaintenanceLogs } from '../hooks/useMaintenanceLogs';
 import { useVehicles } from '../hooks/useVehicles';
-import { addFuelLog, deleteFuelLog, updateFuelLog, type FuelLogEntry } from '../utils/fuelLogStorage';
-import { todayInputValue } from '../utils/dateInput';
 import {
-  distanceUnitLabel,
-  formatConsumption,
-  formatDistance,
-  formatVolume,
-  toLitersFromVolumeValue,
-  toMetersFromDistanceValue,
-  volumeUnitLabel,
-} from '../utils/units';
-import { EditFuelLogDialog } from './EditFuelLogDialog';
-import type { FuelUnit, UnitSystem } from '../types';
+  addMaintenanceLog,
+  deleteMaintenanceLog,
+  updateMaintenanceLog,
+  MAINTENANCE_TYPE_LABELS,
+  MAINTENANCE_TYPES,
+  type MaintenanceLogEntry,
+  type MaintenanceType,
+} from '../utils/maintenanceLogStorage';
+import { todayInputValue } from '../utils/dateInput';
+import { distanceUnitLabel, formatDistance, toMetersFromDistanceValue } from '../utils/units';
+import { EditMaintenanceLogDialog } from './EditMaintenanceLogDialog';
+import type { UnitSystem } from '../types';
 
-interface FuelLogViewProps {
+interface MaintenanceLogViewProps {
   user: User;
   unitSystem: UnitSystem;
-  fuelUnit: FuelUnit;
 }
 
-export function FuelLogView({ user, unitSystem, fuelUnit }: FuelLogViewProps) {
-  const { entries, isLoading, error, refresh } = useFuelLogs(user);
+export function MaintenanceLogView({ user, unitSystem }: MaintenanceLogViewProps) {
+  const { entries, isLoading, error, refresh } = useMaintenanceLogs(user);
   const { vehicles } = useVehicles(user);
 
   const [dateInput, setDateInput] = useState(todayInputValue);
+  const [type, setType] = useState<MaintenanceType>('tires');
   const [odometerInput, setOdometerInput] = useState('');
-  const [volumeInput, setVolumeInput] = useState('');
-  const [priceInput, setPriceInput] = useState('');
   const [vehicleId, setVehicleId] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
-  const [pendingEdit, setPendingEdit] = useState<FuelLogEntry | null>(null);
+  const [pendingEdit, setPendingEdit] = useState<MaintenanceLogEntry | null>(null);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
 
   const handleAdd = async () => {
     const odometer = Number(odometerInput.replace(',', '.'));
-    const volume = Number(volumeInput.replace(',', '.'));
-    const price = Number(priceInput.replace(',', '.'));
     if (!Number.isFinite(odometer) || odometer < 0) {
       setFormError('Renseigne un kilométrage valide.');
-      return;
-    }
-    if (!Number.isFinite(volume) || volume <= 0) {
-      setFormError('Renseigne un volume valide.');
-      return;
-    }
-    if (!Number.isFinite(price) || price <= 0) {
-      setFormError('Renseigne un prix valide.');
       return;
     }
 
     setIsSaving(true);
     setFormError(null);
     try {
-      await addFuelLog(user.uid, {
+      await addMaintenanceLog(user.uid, {
         dateMs: new Date(dateInput).getTime(),
-        volumeLiters: toLitersFromVolumeValue(volume, fuelUnit),
-        priceAmount: price,
+        type,
         odometerMeters: toMetersFromDistanceValue(odometer, unitSystem),
         vehicleId: vehicleId || null,
       });
       setOdometerInput('');
-      setVolumeInput('');
-      setPriceInput('');
       refresh();
     } catch (err) {
       console.error(err);
@@ -75,9 +60,9 @@ export function FuelLogView({ user, unitSystem, fuelUnit }: FuelLogViewProps) {
     }
   };
 
-  const handleConfirmEdit = async (values: Parameters<typeof updateFuelLog>[2]) => {
+  const handleConfirmEdit = async (values: Parameters<typeof updateMaintenanceLog>[2]) => {
     if (!pendingEdit) return;
-    await updateFuelLog(user.uid, pendingEdit.id, values);
+    await updateMaintenanceLog(user.uid, pendingEdit.id, values);
     setPendingEdit(null);
     refresh();
   };
@@ -85,7 +70,7 @@ export function FuelLogView({ user, unitSystem, fuelUnit }: FuelLogViewProps) {
   const handleDelete = async (entryId: string) => {
     setPendingDeleteId(entryId);
     try {
-      await deleteFuelLog(user.uid, entryId);
+      await deleteMaintenanceLog(user.uid, entryId);
       refresh();
     } catch (err) {
       console.error(err);
@@ -97,6 +82,17 @@ export function FuelLogView({ user, unitSystem, fuelUnit }: FuelLogViewProps) {
   return (
     <>
       <div className="fuel-log-form">
+        <label className="dialog-field">
+          Type d'entretien
+          <select value={type} onChange={(event) => setType(event.target.value as MaintenanceType)} disabled={isSaving}>
+            {MAINTENANCE_TYPES.map((option) => (
+              <option key={option} value={option}>
+                {MAINTENANCE_TYPE_LABELS[option]}
+              </option>
+            ))}
+          </select>
+        </label>
+
         <label className="dialog-field">
           Date
           <input
@@ -121,32 +117,6 @@ export function FuelLogView({ user, unitSystem, fuelUnit }: FuelLogViewProps) {
           />
         </label>
 
-        <label className="dialog-field">
-          Volume ({volumeUnitLabel(fuelUnit)})
-          <input
-            type="number"
-            min={0}
-            step={0.01}
-            inputMode="decimal"
-            value={volumeInput}
-            onChange={(event) => setVolumeInput(event.target.value)}
-            disabled={isSaving}
-          />
-        </label>
-
-        <label className="dialog-field">
-          Prix (€)
-          <input
-            type="number"
-            min={0}
-            step={0.01}
-            inputMode="decimal"
-            value={priceInput}
-            onChange={(event) => setPriceInput(event.target.value)}
-            disabled={isSaving}
-          />
-        </label>
-
         {vehicles && vehicles.length > 0 && (
           <label className="dialog-field">
             Véhicule (optionnel)
@@ -163,20 +133,15 @@ export function FuelLogView({ user, unitSystem, fuelUnit }: FuelLogViewProps) {
 
         {formError && <p className="dialog-error">{formError}</p>}
 
-        <button
-          type="button"
-          className="button button-primary"
-          onClick={handleAdd}
-          disabled={isSaving || !odometerInput || !volumeInput || !priceInput}
-        >
-          {isSaving ? 'Enregistrement...' : 'Ajouter le plein'}
+        <button type="button" className="button button-primary" onClick={handleAdd} disabled={isSaving || !odometerInput}>
+          {isSaving ? 'Enregistrement...' : "Ajouter l'entretien"}
         </button>
       </div>
 
       {isLoading && <p className="my-rides-hint">Chargement...</p>}
       {error && <div className="banner banner-error">{error}</div>}
       {!isLoading && entries && entries.length === 0 && (
-        <p className="my-rides-hint">Aucun plein enregistré pour l'instant.</p>
+        <p className="my-rides-hint">Aucun entretien enregistré pour l'instant.</p>
       )}
 
       {entries && entries.length > 0 && (
@@ -185,13 +150,9 @@ export function FuelLogView({ user, unitSystem, fuelUnit }: FuelLogViewProps) {
             <li key={entry.id} className="my-rides-item">
               <div className="my-rides-item-info">
                 <span className="my-rides-item-title">
-                  {new Date(entry.dateMs).toLocaleDateString('fr-FR')} · {formatVolume(entry.volumeLiters, fuelUnit)}
+                  {new Date(entry.dateMs).toLocaleDateString('fr-FR')} · {MAINTENANCE_TYPE_LABELS[entry.type]}
                 </span>
-                <span className="my-rides-item-meta">
-                  {formatDistance(entry.odometerMeters, unitSystem)} au compteur · {entry.priceAmount.toFixed(2)} € ·{' '}
-                  {formatDistance(entry.distanceSinceLastFillMeters, unitSystem)} depuis le dernier plein ·{' '}
-                  {formatConsumption(entry.volumeLiters, entry.distanceSinceLastFillMeters, unitSystem)}
-                </span>
+                <span className="my-rides-item-meta">{formatDistance(entry.odometerMeters, unitSystem)} au compteur</span>
               </div>
               <div className="my-rides-item-actions">
                 <button type="button" className="button button-ghost" onClick={() => setPendingEdit(entry)}>
@@ -212,11 +173,10 @@ export function FuelLogView({ user, unitSystem, fuelUnit }: FuelLogViewProps) {
       )}
 
       {pendingEdit && (
-        <EditFuelLogDialog
+        <EditMaintenanceLogDialog
           entry={pendingEdit}
           vehicles={vehicles}
           unitSystem={unitSystem}
-          fuelUnit={fuelUnit}
           onConfirm={handleConfirmEdit}
           onCancel={() => setPendingEdit(null)}
         />
