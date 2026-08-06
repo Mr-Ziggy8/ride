@@ -89,10 +89,17 @@ export interface Ride {
 }
 
 /** Garage multi-vehicules (feature premium) - purement informatif : associe un
- * parcours ou un plein a une moto, sans impact sur la logique de tracage. */
+ * parcours ou un plein a une moto, sans impact sur la logique de tracage.
+ * name est derive (marque + modele) et toujours present, meme sur les
+ * vehicules crees avant l'ajout des champs marque/modele/annee/etc. */
 export interface Vehicle {
   id: string;
   name: string;
+  brand: string | null;
+  model: string | null;
+  year: number | null;
+  purchaseOdometerMeters: number | null;
+  color: string | null;
   createdAtMs: number;
 }
 

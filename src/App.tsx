@@ -364,7 +364,7 @@ function App() {
         <PremiumUnlockView user={auth.user} onClose={closeView} onRoleGranted={refreshRole} />
       )}
       {view === 'vehicles' && auth.user && userCanAccessPremium && (
-        <VehiclesView user={auth.user} onClose={closeView} />
+        <VehiclesView user={auth.user} unitSystem={settings.unitSystem} onClose={closeView} />
       )}
 
       {/* Pas de garde premium ici : le parrainage doit rester accessible aux
