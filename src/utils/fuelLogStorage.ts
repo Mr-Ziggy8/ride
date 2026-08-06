@@ -49,23 +49,40 @@ export async function deleteFuelLog(uid: string, entryId: string): Promise<void>
   await deleteDoc(doc(db, 'users', uid, 'fuelLogs', entryId));
 }
 
+interface RawFuelLogEntry extends Omit<FuelLogEntry, 'distanceSinceLastFillMeters'> {
+  /** false pour les pleins crees avant l'introduction du kilometrage (ancien
+   * schema base sur une distance saisie a la main) - odometerMeters y vaut 0
+   * par defaut mais n'est pas une vraie lecture, cf. attachDistanceSinceLastFill. */
+  hasOdometerReading: boolean;
+}
+
 /** Le kilometrage saisi par plein est celui du vehicule (pas un delta) : la distance
  * depuis le dernier plein se deduit de l'ecart avec le plein precedent du MEME
  * vehicule (chaque moto a son propre compteur), en parcourant du plus ancien au
- * plus recent. Premier plein d'un vehicule (pas de reference anterieure) -> 0. */
-function attachDistanceSinceLastFill(entries: Omit<FuelLogEntry, 'distanceSinceLastFillMeters'>[]): FuelLogEntry[] {
+ * plus recent. Premier plein d'un vehicule (pas de reference anterieure) -> 0.
+ * Un plein sans vraie lecture d'odometre (ancien schema) ne doit pas polluer la
+ * chaine : il n'alimente pas lastOdometerByVehicle, sinon le plein suivant se
+ * verrait attribuer tout le kilometrage du vehicule depuis son achat. */
+function attachDistanceSinceLastFill(entries: RawFuelLogEntry[]): FuelLogEntry[] {
   const chronological = [...entries].sort((a, b) => a.dateMs - b.dateMs);
   const lastOdometerByVehicle = new Map<string, number>();
   const distanceById = new Map<string, number>();
 
   for (const entry of chronological) {
+    if (!entry.hasOdometerReading) {
+      distanceById.set(entry.id, 0);
+      continue;
+    }
     const vehicleKey = entry.vehicleId ?? '__none__';
     const previousOdometer = lastOdometerByVehicle.get(vehicleKey);
     distanceById.set(entry.id, previousOdometer === undefined ? 0 : Math.max(0, entry.odometerMeters - previousOdometer));
     lastOdometerByVehicle.set(vehicleKey, entry.odometerMeters);
   }
 
-  return entries.map((entry) => ({ ...entry, distanceSinceLastFillMeters: distanceById.get(entry.id) ?? 0 }));
+  return entries.map(({ hasOdometerReading: _hasOdometerReading, ...entry }) => ({
+    ...entry,
+    distanceSinceLastFillMeters: distanceById.get(entry.id) ?? 0,
+  }));
 }
 
 /** Tri anti-chronologique : listFuelLogs(...)[0] est le dernier plein. */
@@ -80,6 +97,7 @@ export async function listFuelLogs(uid: string): Promise<FuelLogEntry[]> {
       volumeLiters: data.volumeLiters,
       priceAmount: data.priceAmount ?? 0,
       odometerMeters: data.odometerMeters ?? 0,
+      hasOdometerReading: typeof data.odometerMeters === 'number',
       vehicleId: data.vehicleId ?? null,
     };
   });

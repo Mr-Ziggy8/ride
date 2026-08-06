@@ -88,6 +88,27 @@ export function bucketConsumptionByPeriod(
   });
 }
 
+export interface BudgetBucket {
+  label: string;
+  totalAmount: number;
+}
+
+/** Base uniquement sur le carnet essence (seule source de prix trackee
+ * aujourd'hui) - meme decoupage temporel que les autres graphes de stats. */
+export function bucketBudgetByPeriod(
+  fuelLogs: FuelLogEntry[],
+  windowStartMs: number,
+  bucketCount: number,
+  nowMs: number,
+): BudgetBucket[] {
+  return bucketBoundaries(windowStartMs, nowMs, bucketCount).map(({ startMs, endMs }) => ({
+    label: bucketLabel(startMs),
+    totalAmount: fuelLogs
+      .filter((entry) => entry.dateMs >= startMs && entry.dateMs < endMs)
+      .reduce((sum, entry) => sum + entry.priceAmount, 0),
+  }));
+}
+
 export interface VisitedRegion {
   key: string;
   label: string;

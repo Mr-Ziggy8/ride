@@ -5,6 +5,7 @@ import { useFuelLogs } from '../hooks/useFuelLogs';
 import { useMyRides } from '../hooks/useMyRides';
 import {
   aggregateVisitedRegions,
+  bucketBudgetByPeriod,
   bucketConsumptionByPeriod,
   bucketDistanceByPeriod,
   RANGE_OPTIONS,
@@ -65,6 +66,25 @@ export function StatisticsView({ user, unitSystem, onClose }: StatisticsViewProp
       consumption: bucket.value,
     }));
   }, [fuelLogs, range, unitSystem]);
+
+  const windowTotalBudget = useMemo(() => {
+    if (!fuelLogs) return 0;
+    const nowMs = Date.now();
+    const windowStartMs = windowStartMsForRange(range.days, nowMs);
+    return fuelLogs
+      .filter((entry) => entry.dateMs >= windowStartMs)
+      .reduce((sum, entry) => sum + entry.priceAmount, 0);
+  }, [fuelLogs, range]);
+
+  const budgetData = useMemo(() => {
+    if (!fuelLogs) return [];
+    const nowMs = Date.now();
+    const windowStartMs = windowStartMsForRange(range.days, nowMs);
+    return bucketBudgetByPeriod(fuelLogs, windowStartMs, range.bucketCount, nowMs).map((bucket) => ({
+      label: bucket.label,
+      amount: bucket.totalAmount,
+    }));
+  }, [fuelLogs, range]);
 
   const visitedRegions = useMemo(() => {
     if (!rides) return [];
@@ -146,6 +166,32 @@ export function StatisticsView({ user, unitSystem, onClose }: StatisticsViewProp
                   ]}
                 />
                 <Bar dataKey="consumption" fill="var(--track)" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </section>
+      )}
+
+      {fuelLogs && (
+        <section className="stats-section">
+          <h3>Budget essence</h3>
+          <dl className="progress-stats">
+            <div className="progress-stat">
+              <dt>Total sur la période</dt>
+              <dd>{windowTotalBudget.toFixed(2)} €</dd>
+            </div>
+          </dl>
+          <div className="stats-chart">
+            <ResponsiveContainer width="100%" height={220}>
+              <BarChart data={budgetData}>
+                <CartesianGrid stroke="var(--border)" strokeDasharray="4 4" vertical={false} />
+                <XAxis dataKey="label" tick={AXIS_TICK_STYLE} axisLine={{ stroke: 'var(--border)' }} tickLine={false} />
+                <YAxis tick={AXIS_TICK_STYLE} axisLine={false} tickLine={false} unit=" €" />
+                <Tooltip
+                  contentStyle={CHART_TOOLTIP_STYLE}
+                  formatter={(value) => [`${Number(value).toFixed(2)} €`, 'Budget']}
+                />
+                <Bar dataKey="amount" fill="var(--warning)" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>

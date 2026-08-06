@@ -63,6 +63,16 @@ export function AppSidebar({
     }
   };
 
+  /** Un bouton qui ferme le menu (Fermer/navigation) declenche isOpen=false donc
+   * aria-hidden/inert sur l'overlay - s'il garde le focus a ce moment, le
+   * navigateur bloque aria-hidden et log un avertissement. Blur synchrone avant
+   * d'appeler l'action, donc avant le re-render, pour ne jamais laisser le focus
+   * dans un sous-arbre qui va devenir aria-hidden. */
+  const handleAction = (action: () => void) => (event: React.MouseEvent<HTMLButtonElement>) => {
+    event.currentTarget.blur();
+    action();
+  };
+
   return (
     <div
       className={`sidebar-overlay${isOpen ? ' sidebar-overlay--open' : ''}`}
@@ -76,7 +86,7 @@ export function AppSidebar({
       <aside className="sidebar" onClick={(event) => event.stopPropagation()}>
         <div className="sidebar-header">
           <h2>Menu</h2>
-          <button type="button" className="button button-ghost" onClick={onClose}>
+          <button type="button" className="button button-ghost" onClick={handleAction(onClose)}>
             Fermer
           </button>
         </div>
@@ -125,59 +135,59 @@ export function AppSidebar({
         </div>
 
         <nav className="sidebar-nav">
-          <button type="button" className="button button-ghost" onClick={() => onNavigate('upload')}>
+          <button type="button" className="button button-ghost" onClick={handleAction(() => onNavigate('upload'))}>
             Charger un GPX
           </button>
-          <button type="button" className="button button-ghost" onClick={() => onNavigate('discovery')}>
+          <button type="button" className="button button-ghost" onClick={handleAction(() => onNavigate('discovery'))}>
             Découverte
           </button>
           {user && (
-            <button type="button" className="button button-ghost" onClick={() => onNavigate('my-rides')}>
+            <button type="button" className="button button-ghost" onClick={handleAction(() => onNavigate('my-rides'))}>
               Mes parcours
             </button>
           )}
           {user && (
-            <button type="button" className="button button-ghost" onClick={() => onNavigate('favorites')}>
+            <button type="button" className="button button-ghost" onClick={handleAction(() => onNavigate('favorites'))}>
               Mes favoris
             </button>
           )}
           {user && (
-            <button type="button" className="button button-ghost" onClick={() => onNavigate('maintenance-book')}>
+            <button type="button" className="button button-ghost" onClick={handleAction(() => onNavigate('maintenance-book'))}>
               Carnet d'entretien
             </button>
           )}
           {user && (
-            <button type="button" className="button button-ghost" onClick={() => onNavigate('statistics')}>
+            <button type="button" className="button button-ghost" onClick={handleAction(() => onNavigate('statistics'))}>
               Statistiques
             </button>
           )}
           {user && (
-            <button type="button" className="button button-ghost" onClick={() => onNavigate('vehicles')}>
+            <button type="button" className="button button-ghost" onClick={handleAction(() => onNavigate('vehicles'))}>
               Mes véhicules
             </button>
           )}
           {user && (
-            <button type="button" className="button button-ghost" onClick={() => onNavigate('badges')}>
+            <button type="button" className="button button-ghost" onClick={handleAction(() => onNavigate('badges'))}>
               Mes badges
             </button>
           )}
           {user && (
-            <button type="button" className="button button-ghost" onClick={() => onNavigate('feedback')}>
+            <button type="button" className="button button-ghost" onClick={handleAction(() => onNavigate('feedback'))}>
               Envoyer un commentaire
             </button>
           )}
           {user && canModerate && settings.adminOptionsEnabled && (
-            <button type="button" className="button button-ghost" onClick={() => onNavigate('feedback-admin')}>
+            <button type="button" className="button button-ghost" onClick={handleAction(() => onNavigate('feedback-admin'))}>
               Feedbacks
             </button>
           )}
           {user && isAdmin && settings.adminOptionsEnabled && (
-            <button type="button" className="button button-ghost" onClick={() => onNavigate('admin-roles')}>
+            <button type="button" className="button button-ghost" onClick={handleAction(() => onNavigate('admin-roles'))}>
               Gestion des rôles
             </button>
           )}
           {user && isAdmin && settings.adminOptionsEnabled && (
-            <button type="button" className="button button-ghost" onClick={() => onNavigate('admin-promo-codes')}>
+            <button type="button" className="button button-ghost" onClick={handleAction(() => onNavigate('admin-promo-codes'))}>
               Gestion codes promo
             </button>
           )}
